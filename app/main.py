@@ -1,14 +1,9 @@
 import json
 import sys
 import hashlib
-
-# import bencodepy - available if you need it!
-# import requests - available if you need it!
-
-# Examples:
-#
-# - decode_bencode(b"5:hello") -> b"hello"
-# - decode_bencode(b"10:hello12345") -> b"hello12345"
+import secrets
+import urllib.parse
+import urllib.request
 
 
 def encode_bencode(value):
@@ -108,6 +103,28 @@ def main():
             while pos < len(metainfo["info"]["pieces"]):
                 print(metainfo["info"]["pieces"][pos:pos+20].hex())
                 pos += 20
+    
+    elif command == "peers":
+        file_name = sys.argv[2]
+        with open(file_name, "rb") as file:
+            metainfo, _ = decode_bencode(file.read())
+            query = {
+                "info_hash": hashlib.sha1(encode_bencode(metainfo["info"])).digest(),
+                "peer_id": secrets.token_urlsafe(20)[:20],
+                "port": 6881,
+                "uploaded": 0,
+                "downloaded": 0,
+                "left": metainfo['info']['length'],
+                "compact": 1,
+            }
+            url = metainfo['announce'] + "?" + urllib.parse.urlencode(query)
+            res, _ = decode_bencode(urllib.request.urlopen(url).read())
+            pos = 0
+            while pos < len(res["peers"]):
+                peer_ip = ".".join(map(str, res['peers'][pos:pos+4]))
+                peer_port = int.from_bytes(res['peers'][pos+4:pos+6], 'big')
+                print(f"{peer_ip}:{peer_port}")
+                pos += 6
 
     else:
         raise NotImplementedError(f"Unknown command {command}")
