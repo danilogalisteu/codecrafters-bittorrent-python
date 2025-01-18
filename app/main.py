@@ -1,5 +1,6 @@
 import json
 import sys
+import hashlib
 
 # import bencodepy - available if you need it!
 # import requests - available if you need it!
@@ -8,6 +9,28 @@ import sys
 #
 # - decode_bencode(b"5:hello") -> b"hello"
 # - decode_bencode(b"10:hello12345") -> b"hello12345"
+
+
+def encode_bencode(value):
+    if isinstance(value, str):
+        value_array = value.encode()
+        return f"{len(value_array)}:".encode() + value_array
+    if isinstance(value, bytes):
+        return f"{len(value)}:".encode() + value
+    elif isinstance(value, int):
+        return f"i{value}e".encode()
+    elif isinstance(value, list):
+        value_array = b"l"
+        for v in value:
+            value_array += encode_bencode(v)
+        return value_array + b"e"
+    elif isinstance(value, dict):
+        value_array = b"d"
+        for k in sorted(value):
+            value_array += encode_bencode(k)
+            value_array += encode_bencode(value[k])
+        return value_array + b"e"
+
 
 def decode_str(bencoded_value, pos):
     first_colon_index = bencoded_value[pos:].find(b":")
@@ -75,8 +98,12 @@ def main():
         file_name = sys.argv[2]
         with open(file_name, "rb") as file:
             metainfo, _ = decode_bencode(file.read(), 0)
+            info = encode_bencode(metainfo["info"])
+            hash = hashlib.sha1(info).hexdigest()
             print(f"Tracker URL: {metainfo['announce']}")
             print(f"Length: {metainfo['info']['length']}")
+            print(f"Info Hash: {hash}")
+
     else:
         raise NotImplementedError(f"Unknown command {command}")
 
