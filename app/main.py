@@ -14,7 +14,12 @@ def decode_str(bencoded_value, pos):
     if first_colon_index == -1:
         raise ValueError("Invalid encoded value")
     str_length = int(bencoded_value[pos:pos+first_colon_index])
-    return bencoded_value[pos+first_colon_index+1:pos+first_colon_index+1+str_length].decode(), pos+first_colon_index+1+str_length
+    str_pos = pos+first_colon_index+1
+    str_end = str_pos+str_length
+    try:
+        return bencoded_value[str_pos:str_end].decode(), str_end
+    except UnicodeDecodeError:
+        return bencoded_value[str_pos:str_end], str_end
 
 
 def decode_int(bencoded_value, pos):
@@ -65,6 +70,13 @@ def main():
             raise TypeError(f"Type not serializable: {type(data)}")
 
         print(json.dumps(decode_bencode(bencoded_value, 0)[0], default=bytes_to_str))
+    
+    elif command == "info":
+        file_name = sys.argv[2]
+        with open(file_name, "rb") as file:
+            metainfo, _ = decode_bencode(file.read(), 0)
+            print(f"Tracker URL: {metainfo['announce']}")
+            print(f"Length: {metainfo['info']['length']}")
     else:
         raise NotImplementedError(f"Unknown command {command}")
 
