@@ -71,6 +71,49 @@ def decode_bencode(bencoded_value, pos=0):
         raise NotImplementedError("Only strings are supported at the moment")
 
 
+def get_metainfo(file_name):
+    with open(file_name, "rb") as file:
+        metainfo, _ = decode_bencode(file.read())
+        return metainfo
+
+
+def print_info(metainfo):
+    hash = hashlib.sha1(encode_bencode(metainfo["info"])).hexdigest()
+    print(f"Tracker URL: {metainfo['announce']}")
+    print(f"Length: {metainfo['info']['length']}")
+    print(f"Info Hash: {hash}")
+    print(f"Piece Length: {metainfo['info']['piece length']}")
+    print("Piece Hashes:")
+    pos = 0
+    while pos < len(metainfo["info"]["pieces"]):
+        print(metainfo["info"]["pieces"][pos:pos+20].hex())
+        pos += 20
+
+
+def get_peers(metainfo, port=6881):
+    query = {
+        "info_hash": hashlib.sha1(encode_bencode(metainfo["info"])).digest(),
+        "peer_id": secrets.token_urlsafe(20)[:20],
+        "port": port,
+        "uploaded": 0,
+        "downloaded": 0,
+        "left": metainfo['info']['length'],
+        "compact": 1,
+    }
+    url = metainfo['announce'] + "?" + urllib.parse.urlencode(query)
+    res, _ = decode_bencode(urllib.request.urlopen(url).read())
+
+    pos = 0
+    peers = []
+    while pos < len(res["peers"]):
+        peer_ip = ".".join(map(str, res['peers'][pos:pos+4]))
+        peer_port = int.from_bytes(res['peers'][pos+4:pos+6], 'big')
+        peers.append((peer_ip, peer_port))
+        pos += 6
+
+    return peers
+
+
 def main():
     command = sys.argv[1]
 
@@ -91,40 +134,16 @@ def main():
     
     elif command == "info":
         file_name = sys.argv[2]
-        with open(file_name, "rb") as file:
-            metainfo, _ = decode_bencode(file.read())
-            hash = hashlib.sha1(encode_bencode(metainfo["info"])).hexdigest()
-            print(f"Tracker URL: {metainfo['announce']}")
-            print(f"Length: {metainfo['info']['length']}")
-            print(f"Info Hash: {hash}")
-            print(f"Piece Length: {metainfo['info']['piece length']}")
-            print("Piece Hashes:")
-            pos = 0
-            while pos < len(metainfo["info"]["pieces"]):
-                print(metainfo["info"]["pieces"][pos:pos+20].hex())
-                pos += 20
+        metainfo = get_metainfo(file_name)
+        if metainfo:
+            print_info(metainfo)
     
     elif command == "peers":
         file_name = sys.argv[2]
-        with open(file_name, "rb") as file:
-            metainfo, _ = decode_bencode(file.read())
-            query = {
-                "info_hash": hashlib.sha1(encode_bencode(metainfo["info"])).digest(),
-                "peer_id": secrets.token_urlsafe(20)[:20],
-                "port": 6881,
-                "uploaded": 0,
-                "downloaded": 0,
-                "left": metainfo['info']['length'],
-                "compact": 1,
-            }
-            url = metainfo['announce'] + "?" + urllib.parse.urlencode(query)
-            res, _ = decode_bencode(urllib.request.urlopen(url).read())
-            pos = 0
-            while pos < len(res["peers"]):
-                peer_ip = ".".join(map(str, res['peers'][pos:pos+4]))
-                peer_port = int.from_bytes(res['peers'][pos+4:pos+6], 'big')
-                print(f"{peer_ip}:{peer_port}")
-                pos += 6
+        metainfo = get_metainfo(file_name)
+        if metainfo:
+            for peer in get_peers(metainfo, port=6881):
+                print(f"{peer[0]}:{peer[1]}")
 
     else:
         raise NotImplementedError(f"Unknown command {command}")
