@@ -14,11 +14,11 @@ def decode_str(bencoded_value, pos):
     if first_colon_index == -1:
         raise ValueError("Invalid encoded value")
     str_length = int(bencoded_value[pos:pos+first_colon_index])
-    return bencoded_value[pos+first_colon_index+1:pos+first_colon_index+1+str_length], pos+first_colon_index+1+str_length
+    return bencoded_value[pos+first_colon_index+1:pos+first_colon_index+1+str_length].decode(), pos+first_colon_index+1+str_length
 
 
 def decode_int(bencoded_value, pos):
-    end = pos
+    end = pos + 1
     while chr(bencoded_value[end]) != "e":
         end += 1
     return int(bencoded_value[pos+1:end]), end + 1
@@ -36,6 +36,14 @@ def decode_bencode(bencoded_value, pos):
             res, pos = decode_bencode(bencoded_value, pos)
             res_list.append(res)
         return res_list, pos + 1
+    elif chr(bencoded_value[pos]) == "d":
+        res_dict = {}
+        pos += 1
+        while chr(bencoded_value[pos]) != "e":
+            res_key, pos = decode_str(bencoded_value, pos)
+            res_val, pos = decode_bencode(bencoded_value, pos)
+            res_dict[res_key] = res_val
+        return res_dict, pos + 1
     else:
         raise NotImplementedError("Only strings are supported at the moment")
 
