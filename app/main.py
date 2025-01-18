@@ -8,14 +8,34 @@ import sys
 #
 # - decode_bencode(b"5:hello") -> b"hello"
 # - decode_bencode(b"10:hello12345") -> b"hello12345"
-def decode_bencode(bencoded_value):
-    if chr(bencoded_value[0]).isdigit():
-        first_colon_index = bencoded_value.find(b":")
-        if first_colon_index == -1:
-            raise ValueError("Invalid encoded value")
-        return bencoded_value[first_colon_index+1:]
-    elif chr(bencoded_value[0]) == "i" and chr(bencoded_value[-1]) == "e":
-        return int(bencoded_value[1:-1])
+
+def decode_str(bencoded_value, pos):
+    first_colon_index = bencoded_value[pos:].find(b":")
+    if first_colon_index == -1:
+        raise ValueError("Invalid encoded value")
+    str_length = int(bencoded_value[pos:pos+first_colon_index])
+    return bencoded_value[pos+first_colon_index+1:pos+first_colon_index+1+str_length], pos+first_colon_index+1+str_length
+
+
+def decode_int(bencoded_value, pos):
+    end = pos
+    while chr(bencoded_value[end]) != "e":
+        end += 1
+    return int(bencoded_value[pos+1:end]), end + 1
+
+
+def decode_bencode(bencoded_value, pos):
+    if chr(bencoded_value[pos]).isdigit():
+        return decode_str(bencoded_value, pos)
+    elif chr(bencoded_value[pos]) == "i":
+        return decode_int(bencoded_value, pos)
+    elif chr(bencoded_value[pos]) == "l":
+        res_list = []
+        pos += 1
+        while chr(bencoded_value[pos]) != "e":
+            res, pos = decode_bencode(bencoded_value, pos)
+            res_list.append(res)
+        return res_list, pos + 1
     else:
         raise NotImplementedError("Only strings are supported at the moment")
 
@@ -36,7 +56,7 @@ def main():
 
             raise TypeError(f"Type not serializable: {type(data)}")
 
-        print(json.dumps(decode_bencode(bencoded_value), default=bytes_to_str))
+        print(json.dumps(decode_bencode(bencoded_value, 0)[0], default=bytes_to_str))
     else:
         raise NotImplementedError(f"Unknown command {command}")
 
