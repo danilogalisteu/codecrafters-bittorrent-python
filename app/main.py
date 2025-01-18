@@ -52,7 +52,7 @@ def decode_int(bencoded_value, pos):
     return int(bencoded_value[pos+1:end]), end + 1
 
 
-def decode_bencode(bencoded_value, pos):
+def decode_bencode(bencoded_value, pos=0):
     if chr(bencoded_value[pos]).isdigit():
         return decode_str(bencoded_value, pos)
     elif chr(bencoded_value[pos]) == "i":
@@ -92,17 +92,22 @@ def main():
 
             raise TypeError(f"Type not serializable: {type(data)}")
 
-        print(json.dumps(decode_bencode(bencoded_value, 0)[0], default=bytes_to_str))
+        print(json.dumps(decode_bencode(bencoded_value)[0], default=bytes_to_str))
     
     elif command == "info":
         file_name = sys.argv[2]
         with open(file_name, "rb") as file:
-            metainfo, _ = decode_bencode(file.read(), 0)
-            info = encode_bencode(metainfo["info"])
-            hash = hashlib.sha1(info).hexdigest()
+            metainfo, _ = decode_bencode(file.read())
+            hash = hashlib.sha1(encode_bencode(metainfo["info"])).hexdigest()
             print(f"Tracker URL: {metainfo['announce']}")
             print(f"Length: {metainfo['info']['length']}")
             print(f"Info Hash: {hash}")
+            print(f"Piece Length: {metainfo['info']['piece length']}")
+            print("Piece Hashes:")
+            pos = 0
+            while pos < len(metainfo["info"]["pieces"]):
+                print(metainfo["info"]["pieces"][pos:pos+20].hex())
+                pos += 20
 
     else:
         raise NotImplementedError(f"Unknown command {command}")
