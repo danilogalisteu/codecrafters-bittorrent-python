@@ -178,6 +178,9 @@ def encode_message(id: int=None, payload: bytes=b"") -> bytes:
 
 
 def decode_message(message: bytes) -> tuple[int, bytes]:
+    if len(message) < 4:
+        # Signal incomplete message
+        raise IndexError
     payload_length = struct.unpack("!I", message[:4])[0]
     if payload_length > 0:
         id = message[4]
