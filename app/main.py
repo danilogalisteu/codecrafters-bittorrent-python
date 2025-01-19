@@ -24,23 +24,23 @@ def run_decode(value: str):
     print(json.dumps(decode_bencode(bencoded_value)[0], default=bytes_to_str))
 
 
-def run_info(torrent_name: str):
-    metainfo = get_metainfo(torrent_name)
+def run_info(torrent_file: str):
+    metainfo = get_metainfo(torrent_file)
     if metainfo:
         print_info(metainfo)
 
 
-def run_peers(torrent_name: str, peer_id: bytes):
-    metainfo = get_metainfo(torrent_name)
+def run_peers(torrent_file: str, peer_id: bytes):
+    metainfo = get_metainfo(torrent_file)
     if metainfo:
         peers = get_peers(metainfo, peer_id, port=6881)
         print_peers(peers)
 
 
-def run_handshake(torrent_name: str, peer_address: str, peer_id: bytes):
+def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes):
     peer_address = peer_address.split(":")
     peer = peer_address[0], int(peer_address[1])
-    metainfo = get_metainfo(torrent_name)
+    metainfo = get_metainfo(torrent_file)
     if metainfo:
         info_hash = get_infohash(metainfo)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -50,8 +50,8 @@ def run_handshake(torrent_name: str, peer_address: str, peer_id: bytes):
             print(f"Peer ID: {r_peer_id.hex()}")
 
 
-def run_download_piece(piece_name: str, piece_index: int, torrent_name: str, peer_id: bytes):
-    metainfo = get_metainfo(torrent_name)
+def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, peer_id: bytes):
+    metainfo = get_metainfo(torrent_file)
     if metainfo:
         info_hash = get_infohash(metainfo)
         if piece_index >= len(metainfo["info"]["pieces"]):
@@ -82,35 +82,68 @@ def run_download_piece(piece_name: str, piece_index: int, torrent_name: str, pee
 
                 sock.close()
 
-                with open(piece_name, "wb") as file:
+                with open(piece_file, "wb") as file:
                     file.write(piece)
+
+
+def make_parser(peer_id: bytes):
+    parser = argparse.ArgumentParser(prog="app.main", description="Basic bittorrent client")
+    subparsers = parser.add_subparsers(title="command", description="valid commands", required=True)
+
+    parser_decode = subparsers.add_parser(
+        "decode",
+        description="decode data in bencode format",
+        help="decode data in bencode format",
+    )
+    parser_decode.add_argument("value", type=str, help="string to be decoded")
+    parser_decode.set_defaults(command_cb=run_decode)
+
+    parser_info = subparsers.add_parser(
+        "info",
+        description="show torrent information",
+        help="show torrent information",
+    )
+    parser_info.add_argument("torrent_file", type=str, help="path to torrent file")
+    parser_info.set_defaults(command_cb=run_info)
+
+    parser_peers = subparsers.add_parser(
+        "peers",
+        description="get peers in torrent tracker and show addresses",
+        help="get peers in torrent tracker and show addresses",
+    )
+    parser_peers.add_argument("torrent_file", type=str, help="path to torrent file")
+    parser_peers.set_defaults(command_cb=run_peers, peer_id=peer_id)
+
+    parser_handshake = subparsers.add_parser(
+        "handshake",
+        description="do handshake with peer",
+        help="do handshake with peer",
+    )
+    parser_handshake.add_argument("torrent_file", type=str, help="path to torrent file")
+    parser_handshake.add_argument("peer_address", type=str, help="address of the peer as <IP>:<PORT>")
+    parser_handshake.set_defaults(command_cb=run_handshake, peer_id=peer_id)
+
+    parser_piece = subparsers.add_parser(
+        "download_piece",
+        description="download piece of file",
+        help="download piece of file",
+    )
+    parser_piece.add_argument("-o", type=str, required=True, dest="piece_file", metavar="piece_file", help="path to piece file (will be overwritten)")
+    parser_piece.add_argument("torrent_file", type=str, help="path to torrent file")
+    parser_piece.add_argument("piece_index", type=int, help="index of the piece (starting at 0)")
+    parser_piece.set_defaults(command_cb=run_download_piece, peer_id=peer_id)
+
+    return parser
 
 
 def main() -> None:
     peer_id = secrets.token_bytes(20)
 
-    parser = argparse.ArgumentParser(prog='bittorrent', description='Simple bittorrent client')
-    parser.add_argument("command")
-
-    command = sys.argv[1]
-
-    if command == "decode":
-        run_decode(sys.argv[2])
-    
-    elif command == "info":
-        run_info(sys.argv[2])
-    
-    elif command == "peers":
-        run_peers(sys.argv[2], peer_id)
-
-    elif command == "handshake":
-        run_handshake(sys.argv[2], sys.argv[3], peer_id)
-
-    elif command == "download_piece":
-        run_download_piece(sys.argv[3], int(sys.argv[5]), sys.argv[4], peer_id)
-
-    else:
-        raise NotImplementedError(f"Unknown command {command}")
+    parser = make_parser(peer_id)
+    args = parser.parse_args(sys.argv[1:])
+    command_cb = args.command_cb
+    args = {k:v for k, v in vars(args).items() if k != "command_cb"}
+    command_cb(**args)
 
 
 if __name__ == "__main__":
