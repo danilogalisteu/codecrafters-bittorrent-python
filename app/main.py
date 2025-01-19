@@ -141,19 +141,14 @@ def decode_handshake(data: bytes) -> tuple[bytes, bytes]:
     return r_info_hash, r_peer_id
 
 
-def get_handshake(host: str, port: int, info_hash_str: str) -> bytes:
+def send_handshake(sock: socket.SocketType, info_hash_str: str) -> bytes:
     info_hash = hashlib.sha1(encode_bencode(info_hash_str)).digest()
     peer_id = secrets.token_bytes(20)
     message = encode_handshake(info_hash, peer_id)
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((host, port))
-        s.send(message)
-        data = s.recv(1024)
-        s.close()
-        r_info_hash, r_peer_id = decode_handshake(data)
-        assert info_hash == r_info_hash
-        return r_peer_id
+    sock.send(message)
+    r_info_hash, r_peer_id = decode_handshake(sock.recv(1024))
+    assert info_hash == r_info_hash
+    return r_peer_id
 
 
 def main() -> None:
@@ -195,8 +190,11 @@ def main() -> None:
         peer_port = int(peer_host_port[peer_sep_index+1:])
         metainfo = get_metainfo(file_name)
         if metainfo:
-            r_peer_id = get_handshake(peer_host, peer_port, metainfo["info"])
-            print(f"Peer ID: {r_peer_id.hex()}")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((peer_host, peer_port))
+                r_peer_id = send_handshake(sock, metainfo["info"])
+                sock.close()
+                print(f"Peer ID: {r_peer_id.hex()}")
 
     else:
         raise NotImplementedError(f"Unknown command {command}")
