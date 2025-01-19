@@ -203,6 +203,12 @@ def get_peers_info(peers: list[tuple[str, int]], info_hash: bytes, peer_id: byte
     return peers_info
 
 
+def has_bitfield_piece(bitfield: bytes, piece_index: int) -> bool:
+    bitfield_index = piece_index // 8
+    byte_mask = 1 << (7 - piece_index % 8)
+    return (bitfield[bitfield_index] & byte_mask) != 0
+
+
 def send_interested(sock: socket.SocketType) -> None:
     sock.send(encode_message(MsgID.INTERESTED, b""))
 
@@ -325,10 +331,10 @@ def main() -> None:
 
             peers = get_peers(metainfo, peer_id)
             peers_info = get_peers_info(peers, info_hash, peer_id)
-            print(peers_info)
-            if peers:
+            peers_valid = [peer for peer in peers if has_bitfield_piece(peers_info[peer][1], piece_index)]
+            if peers_valid:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.connect(peers[0])
+                    sock.connect(peers_valid[0])
 
                     r_peer_id = send_handshake(sock, info_hash, peer_id)
 
