@@ -1,6 +1,6 @@
 import hashlib
 
-from bencode import encode_bencode, decode_bencode
+from .bencode import encode_bencode, decode_bencode
 
 
 def parse_metainfo_pieces(pieces: bytes) -> list[bytes]:

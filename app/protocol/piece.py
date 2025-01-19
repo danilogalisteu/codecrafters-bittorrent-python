@@ -2,8 +2,8 @@ import hashlib
 import socket
 import struct
 
-from message import MsgID, recv_message, send_message
-from metainfo import parse_metainfo_pieces
+from .message import MsgID, recv_message, send_message
+from .metainfo import parse_metainfo_pieces
 
 
 def send_request(sock: socket.SocketType, index: int, begin: int, length: int) -> None:

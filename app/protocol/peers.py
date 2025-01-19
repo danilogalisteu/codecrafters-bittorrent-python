@@ -2,10 +2,10 @@ import socket
 import urllib.parse
 import urllib.request
 
-from bencode import decode_bencode
-from handshake import do_handshake
-from message import MsgID, recv_message
-from metainfo import get_infohash
+from .bencode import decode_bencode
+from .handshake import do_handshake
+from .message import MsgID, recv_message
+from .metainfo import get_infohash
 
 
 def get_peers(metainfo: dict, peer_id: bytes, port: int=6881) -> list[tuple[str, int]]:

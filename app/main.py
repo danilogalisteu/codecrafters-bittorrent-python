@@ -3,12 +3,12 @@ import sys
 import secrets
 import socket
 
-from bencode import decode_bencode
-from handshake import do_handshake
-from message import MsgID, recv_message, send_message
-from metainfo import get_infohash, get_metainfo, print_info
-from peers import get_peer_info, get_peers, has_bitfield_piece, print_peers
-from piece import recv_piece
+from protocol.bencode import decode_bencode
+from protocol.handshake import do_handshake
+from protocol.message import MsgID, recv_message, send_message
+from protocol.metainfo import get_infohash, get_metainfo, print_info
+from protocol.peers import get_peer_info, get_peers, has_bitfield_piece, print_peers
+from protocol.piece import recv_piece
 
 
 def main() -> None:
