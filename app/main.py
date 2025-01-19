@@ -7,7 +7,7 @@ import sys
 from .protocol.bencode import decode_bencode
 from .protocol.handshake import do_handshake
 from .protocol.message import MsgID, recv_message, send_message
-from .protocol.metainfo import get_infohash, get_metainfo, print_info
+from .protocol.metainfo import get_infohash, get_metainfo, parse_metainfo_pieces, print_info
 from .protocol.peers import get_peer_info, get_peers, has_bitfield_piece, print_peers
 from .protocol.piece import recv_piece
 
@@ -54,8 +54,9 @@ def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, pee
     metainfo = get_metainfo(torrent_file)
     if metainfo:
         info_hash = get_infohash(metainfo)
-        if piece_index >= len(metainfo["info"]["pieces"]):
-            print(f"Piece {piece_index} not found in torrent")
+        pieces_hash = parse_metainfo_pieces(metainfo["info"]["pieces"])
+        if piece_index >= len(pieces_hash):
+            raise IndexError(f"Piece {piece_index} not found in torrent")
 
         peers = get_peers(metainfo, peer_id)
         peers_info = {peer: get_peer_info(peer, info_hash, peer_id) for peer in peers}
