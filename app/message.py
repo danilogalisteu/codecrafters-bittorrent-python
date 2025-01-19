@@ -14,40 +14,50 @@ class MsgID(IntEnum):
 
 def encode_message(id: int=None, payload: bytes=b"") -> bytes:
     payload_length = len(payload)
-    message = bytearray(4 + (1 if id else 0) + payload_length)
-    message[:4] = struct.pack("!I", (1 if id else 0) + payload_length)
+    buffer = bytearray(4 + (1 if id else 0) + payload_length)
+    buffer[:4] = struct.pack("!I", (1 if id else 0) + payload_length)
     if id:
-        message[4] = id
+        buffer[4] = id
     if payload_length > 0:
-        message[5:] = payload
-    return message
+        buffer[5:] = payload
+    return buffer
 
 
-def decode_message(message: bytes) -> tuple[int, bytes]:
-    if len(message) < 4:
+def decode_message(buffer: bytes) -> tuple[int, bytes]:
+    len_buffer = len(buffer)
+    if len_buffer < 4:
         # Signal incomplete message
         raise IndexError
-    payload_length = struct.unpack("!I", message[:4])[0]
+    payload_length = struct.unpack("!I", buffer[:4])[0]
+    if payload_length > len_buffer - 4:
+        # Signal incomplete message
+        raise IndexError
+    id, payload = -1, b""
     if payload_length > 0:
-        id = message[4] if payload_length > 1 else  -1
-        payload = message[5:4+payload_length] if payload_length > 1 else b""
+        id = buffer[4]
+    if payload_length > 1:
+        payload = buffer[5:4+payload_length]
     return id, payload
 
 
-def recv_bitfield(sock: socket.SocketType) -> bytes:
-    id, bitfield = decode_message(sock.recv(1024))
-    assert id == MsgID.BITFIELD
-    return bitfield
+def recv_message(recv_id: int, sock: socket.SocketType, buffer: bytes) -> bytes:
+    while True:
+        try:
+            id, payload = decode_message(buffer)
+            # Drop parsed data
+            parsed_length = 4 + (1 if id > -1 else 0) + len(payload)
+            buffer = buffer[parsed_length:] if len(buffer) > parsed_length else b""
+        except IndexError:
+            # Incomplete message
+            buffer += sock.recv(1024)
+            continue
+        if id == recv_id:
+            break
+    return payload
 
 
-def send_interested(sock: socket.SocketType) -> None:
-    sock.send(encode_message(MsgID.INTERESTED, b""))
-
-
-def recv_unchoke(sock: socket.SocketType) -> None:
-    id, payload = decode_message(sock.recv(1024))
-    assert id == MsgID.UNCHOKE
-    assert len(payload) == 0
+def send_message(send_id: int, sock: socket.SocketType, payload: bytes=b""):
+    sock.send(encode_message(send_id, payload))
 
 
 def send_request(sock: socket.SocketType, index: int, begin: int, length: int) -> None:

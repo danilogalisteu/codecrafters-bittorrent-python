@@ -4,7 +4,7 @@ import urllib.request
 
 from bencode import decode_bencode
 from handshake import do_handshake
-from message import recv_bitfield
+from message import MsgID, recv_message
 from metainfo import get_infohash
 
 
@@ -42,7 +42,8 @@ def get_peer_info(peer: tuple[str, int], info_hash: bytes, peer_id: bytes) -> tu
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect(peer)
         r_peer_id, _ = do_handshake(sock, info_hash, peer_id)
-        r_bitfield = recv_bitfield(sock)
+        comm_buffer = b""
+        r_bitfield = recv_message(MsgID.BITFIELD, sock, comm_buffer)
         sock.close()
         return r_peer_id, r_bitfield
 

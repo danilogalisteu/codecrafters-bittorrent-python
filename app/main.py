@@ -5,7 +5,7 @@ import socket
 
 from bencode import decode_bencode
 from handshake import do_handshake
-from message import recv_bitfield, recv_unchoke, send_interested
+from message import MsgID, recv_message, send_message
 from metainfo import get_infohash, get_metainfo, print_info
 from peers import get_peer_info, get_peers, has_bitfield_piece, print_peers
 from piece import recv_piece
@@ -73,20 +73,23 @@ def main() -> None:
                     sock.connect(peer)
 
                     _, _ = do_handshake(sock, info_hash, peer_id)
-                    
-                    bitfield = recv_bitfield(sock)
+
+                    comm_buffer = b""
+
+                    bitfield = recv_message(MsgID.BITFIELD, sock, comm_buffer)
                     assert has_bitfield_piece(bitfield, piece_index)
 
-                    send_interested(sock)
+                    send_message(MsgID.INTERESTED, sock)
 
-                    recv_unchoke(sock)
+                    payload = recv_message(MsgID.UNCHOKE, sock, comm_buffer)
+                    assert len(payload) == 0
 
-                    piece = recv_piece(sock, metainfo, piece_index)
+                    # piece = recv_piece(sock, metainfo, piece_index)
 
                     sock.close()
 
-                    with open(piece_file_name, "wb") as file:
-                        file.write(piece)
+                    # with open(piece_file_name, "wb") as file:
+                    #     file.write(piece)
 
     else:
         raise NotImplementedError(f"Unknown command {command}")
