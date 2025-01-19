@@ -231,8 +231,16 @@ def recv_piece_chunk(sock: socket.SocketType, msg_length: int, chunk_length: int
         chunk = sock.recv(msg_length)
         msg += chunk
         msg_total += len(chunk)
-    id, payload = decode_message(msg)
-    assert id == MsgID.PIECE
+        try:
+            id, payload = decode_message(msg)
+            assert id == MsgID.PIECE
+        except AssertionError:
+            # Unexpected message, discard data
+            print("MsgID", id)
+            msg_length = 5 + len(payload)
+            msg = msg[msg_length:]
+            msg_total -= msg_length
+
     index = struct.unpack("!I", payload[0:4])[0]
     begin = struct.unpack("!I", payload[4:8])[0]
     block = payload[8:]
