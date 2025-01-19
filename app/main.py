@@ -7,6 +7,7 @@ import struct
 from enum import IntEnum
 
 from bencode import decode_bencode
+from handshake import do_handshake
 from metainfo import get_infohash, get_metainfo, parse_metainfo_pieces, print_info
 from peers import get_peers, print_peers
 
@@ -18,39 +19,6 @@ class MsgID(IntEnum):
     BITFIELD = 5
     REQUEST = 6
     PIECE = 7
-
-
-def encode_handshake(info_hash: bytes, peer_id: bytes) -> bytes:
-    pstr = b"BitTorrent protocol"
-    pstrlen = len(pstr)
-    reserved = b"\x00\x00\x00\x00\x00\x00\x00\x00"
-    
-    message = bytearray(49 + pstrlen)
-    message[0] = pstrlen
-    message[1:1+pstrlen] = pstr
-    message[1+pstrlen:1+pstrlen+8] = reserved
-    message[1+pstrlen+8:1+pstrlen+8+20] = info_hash
-    message[1+pstrlen+8+20:1+pstrlen+8+20+20] = peer_id
-    return message
-
-
-def decode_handshake(data: bytes) -> tuple[bytes, bytes]:
-    pstr = b"BitTorrent protocol"
-    r_pstrlen = data[0]
-    r_pstr = data[1:1+r_pstrlen]
-    assert pstr == r_pstr
-    # r_reserved_ = data[1+r_pstrlen:1+r_pstrlen+8]
-    r_info_hash = data[1+r_pstrlen+8:1+r_pstrlen+8+20]
-    r_peer_id = data[1+r_pstrlen+8+20:1+r_pstrlen+8+20+20]
-    return r_info_hash, r_peer_id
-
-
-def send_handshake(sock: socket.SocketType, info_hash: bytes, peer_id: bytes) -> bytes:
-    message = encode_handshake(info_hash, peer_id)
-    sock.send(message)
-    r_info_hash, r_peer_id = decode_handshake(sock.recv(1024))
-    assert info_hash == r_info_hash
-    return r_peer_id
 
 
 def encode_message(id: int=None, payload: bytes=b"") -> bytes:
@@ -86,7 +54,7 @@ def get_peers_info(peers: list[tuple[str, int]], info_hash: bytes, peer_id: byte
     for peer in peers:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(peer)
-            r_peer_id = send_handshake(sock, info_hash, peer_id)
+            r_peer_id, _ = do_handshake(sock, info_hash, peer_id)
             r_bitfield = recv_bitfield(sock)
             sock.close()
             peers_info[peer] = (r_peer_id, r_bitfield)
@@ -216,9 +184,9 @@ def main() -> None:
             info_hash = get_infohash(metainfo)
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.connect((peer_host, peer_port))
-                r_peer_id = send_handshake(sock, info_hash, peer_id)
+                r_peer_id, _ = do_handshake(sock, info_hash, peer_id)
                 sock.close()
-                print(f"Peer ID: {r_peer_id.hex()}")
+            print(f"Peer ID: {r_peer_id.hex()}")
 
     elif command == "download_piece":
         piece_file_name = sys.argv[3]
@@ -235,11 +203,12 @@ def main() -> None:
             peers_valid = [peer for peer in peers if has_bitfield_piece(peers_info[peer][1], piece_index)]
             if peers_valid:
                 peer = peers_valid[0]
+
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     sock.connect(peer)
 
-                    _ = send_handshake(sock, info_hash, peer_id)
-
+                    _, _ = do_handshake(sock, info_hash, peer_id)
+                    
                     bitfield = recv_bitfield(sock)
                     assert has_bitfield_piece(bitfield, piece_index)
 
