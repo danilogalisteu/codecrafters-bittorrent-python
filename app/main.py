@@ -7,7 +7,7 @@ import struct
 from enum import IntEnum
 
 from bencode import encode_bencode, decode_bencode
-from metainfo import get_metainfo, parse_metainfo_pieces, print_info
+from metainfo import get_infohash, get_metainfo, parse_metainfo_pieces, print_info
 from peers import get_peers, print_peers
 
 
@@ -213,7 +213,7 @@ def main() -> None:
         peer_port = int(peer_host_port[peer_sep_index+1:])
         metainfo = get_metainfo(file_name)
         if metainfo:
-            info_hash = hashlib.sha1(encode_bencode(metainfo["info"])).digest()
+            info_hash = get_infohash(metainfo)
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.connect((peer_host, peer_port))
                 r_peer_id = send_handshake(sock, info_hash, peer_id)
@@ -226,7 +226,7 @@ def main() -> None:
         piece_index = int(sys.argv[5])
         metainfo = get_metainfo(torrent_file_name)
         if metainfo:
-            info_hash = hashlib.sha1(encode_bencode(metainfo["info"])).digest()
+            info_hash = get_infohash(metainfo)
             if piece_index >= len(metainfo["info"]["pieces"]):
                 print(f"Piece {piece_index} not found in torrent")
 
