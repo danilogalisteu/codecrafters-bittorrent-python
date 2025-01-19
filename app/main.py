@@ -191,6 +191,10 @@ def recv_bitfield(sock: socket.SocketType) -> bytes:
     return bitfield
 
 
+def send_interested(sock: socket.SocketType) -> None:
+    sock.send(encode_message(MsgID.INTERESTED, b""))
+
+
 def main() -> None:
     peer_id = secrets.token_bytes(20)
 
@@ -257,6 +261,8 @@ def main() -> None:
                     r_peer_id = send_handshake(sock, peer_id, info_hash)
 
                     _ = recv_bitfield(sock)
+
+                    send_interested(sock)
 
                     sock.close()
 
