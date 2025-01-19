@@ -7,7 +7,7 @@ import urllib.parse
 import urllib.request
 
 
-def encode_bencode(value):
+def encode_bencode(value: str | bytes | int | list | dict) -> bytes:
     if isinstance(value, str):
         value_array = value.encode()
         return f"{len(value_array)}:".encode() + value_array
@@ -28,7 +28,7 @@ def encode_bencode(value):
         return value_array + b"e"
 
 
-def decode_str(bencoded_value, pos):
+def decode_str(bencoded_value: bytes, pos: int) -> tuple[str, int] | tuple[bytes, int]:
     first_colon_index = bencoded_value[pos:].find(b":")
     if first_colon_index == -1:
         raise ValueError("Invalid encoded value")
@@ -41,14 +41,14 @@ def decode_str(bencoded_value, pos):
         return bencoded_value[str_pos:str_end], str_end
 
 
-def decode_int(bencoded_value, pos):
+def decode_int(bencoded_value: bytes, pos: int) -> tuple[int, int]:
     end = pos + 1
     while chr(bencoded_value[end]) != "e":
         end += 1
     return int(bencoded_value[pos+1:end]), end + 1
 
 
-def decode_bencode(bencoded_value, pos=0):
+def decode_bencode(bencoded_value: bytes, pos: int=0) -> tuple[str, int] | tuple[bytes, int] | tuple[int, int] | tuple[list, int] | tuple[dict, int]:
     if chr(bencoded_value[pos]).isdigit():
         return decode_str(bencoded_value, pos)
     elif chr(bencoded_value[pos]) == "i":
@@ -72,13 +72,13 @@ def decode_bencode(bencoded_value, pos=0):
         raise NotImplementedError("Only strings are supported at the moment")
 
 
-def get_metainfo(file_name):
+def get_metainfo(file_name: str) -> dict:
     with open(file_name, "rb") as file:
         metainfo, _ = decode_bencode(file.read())
         return metainfo
 
 
-def print_info(metainfo):
+def print_info(metainfo: dict):
     hash = hashlib.sha1(encode_bencode(metainfo["info"])).hexdigest()
     print(f"Tracker URL: {metainfo['announce']}")
     print(f"Length: {metainfo['info']['length']}")
@@ -91,7 +91,7 @@ def print_info(metainfo):
         pos += 20
 
 
-def get_peers(metainfo, port=6881):
+def get_peers(metainfo: dict, port: int=6881) -> list[tuple[str, int]]:
     query = {
         "info_hash": hashlib.sha1(encode_bencode(metainfo["info"])).digest(),
         "peer_id": secrets.token_urlsafe(20)[:20],
@@ -115,7 +115,7 @@ def get_peers(metainfo, port=6881):
     return peers
 
 
-def get_handshake(host, port, metainfo):
+def get_handshake(host: str, port: int, metainfo: dict) -> bytes:
     pstr = b"BitTorrent protocol"
     pstrlen = len(pstr)
     reserved = b"\x00\x00\x00\x00\x00\x00\x00\x00"
@@ -142,7 +142,7 @@ def get_handshake(host, port, metainfo):
         return r_peer_id
 
 
-def main():
+def main() -> None:
     command = sys.argv[1]
 
     if command == "decode":
