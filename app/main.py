@@ -240,6 +240,9 @@ def recv_piece_chunk(sock: socket.SocketType, msg_length: int, chunk_length: int
             msg_length = 5 + len(payload)
             msg = msg[msg_length:]
             msg_total -= msg_length
+        except IndexError:
+            # Incomplete message
+            continue
 
     index = struct.unpack("!I", payload[0:4])[0]
     begin = struct.unpack("!I", payload[4:8])[0]
