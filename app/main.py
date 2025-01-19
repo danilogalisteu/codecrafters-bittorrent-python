@@ -2,6 +2,7 @@ import json
 import sys
 import hashlib
 import secrets
+import socket
 import urllib.parse
 import urllib.request
 
@@ -114,6 +115,33 @@ def get_peers(metainfo, port=6881):
     return peers
 
 
+def get_handshake(host, port, metainfo):
+    pstr = b"BitTorrent protocol"
+    pstrlen = len(pstr)
+    reserved = b"\x00\x00\x00\x00\x00\x00\x00\x00"
+    info_hash = hashlib.sha1(encode_bencode(metainfo["info"])).digest()
+    peer_id = secrets.token_bytes(20)
+    message = bytearray(49 + pstrlen)
+    message[0] = pstrlen
+    message[1:1+pstrlen] = pstr
+    message[1+pstrlen:1+pstrlen+8] = reserved
+    message[1+pstrlen+8:1+pstrlen+8+20] = info_hash
+    message[1+pstrlen+8+20:1+pstrlen+8+20+20] = peer_id
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((host, port))
+        s.send(message)
+        data = s.recv(1024)
+        r_pstrlen = data[0]
+        r_pstr = data[1:1+r_pstrlen]
+        assert pstr == r_pstr
+        # r_reserved_ = data[1+r_pstrlen:1+r_pstrlen+8]
+        r_info_hash = data[1+r_pstrlen+8:1+r_pstrlen+8+20]
+        assert info_hash == r_info_hash
+        r_peer_id = data[1+r_pstrlen+8+20:1+r_pstrlen+8+20+20]
+        return r_peer_id
+
+
 def main():
     command = sys.argv[1]
 
@@ -144,6 +172,16 @@ def main():
         if metainfo:
             for peer in get_peers(metainfo, port=6881):
                 print(f"{peer[0]}:{peer[1]}")
+
+    elif command == "handshake":
+        file_name = sys.argv[2]
+        peer_host_port = sys.argv[3]
+        peer_sep_index = peer_host_port.find(":")
+        peer_host = peer_host_port[:peer_sep_index]
+        peer_port = int(peer_host_port[peer_sep_index+1:])
+        metainfo = get_metainfo(file_name)
+        r_peer_id = get_handshake(peer_host, peer_port, metainfo)
+        print(f"Peer ID: {r_peer_id.hex()}")
 
     else:
         raise NotImplementedError(f"Unknown command {command}")
