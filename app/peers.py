@@ -1,7 +1,10 @@
+import socket
 import urllib.parse
 import urllib.request
 
 from bencode import decode_bencode
+from handshake import do_handshake
+from message import recv_bitfield
 from metainfo import get_infohash
 
 
@@ -33,3 +36,12 @@ def get_peers(metainfo: dict, peer_id: bytes, port: int=6881) -> list[tuple[str,
 def print_peers(peers: list[tuple[str, int]]):
     for peer in peers:
         print(f"{peer[0]}:{peer[1]}")
+
+
+def get_peer_info(peer: tuple[str, int], info_hash: bytes, peer_id: bytes) -> tuple[bytes, bytes]:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.connect(peer)
+        r_peer_id, _ = do_handshake(sock, info_hash, peer_id)
+        r_bitfield = recv_bitfield(sock)
+        sock.close()
+        return r_peer_id, r_bitfield

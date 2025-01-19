@@ -4,82 +4,18 @@ import hashlib
 import secrets
 import socket
 import struct
-from enum import IntEnum
 
 from bencode import decode_bencode
 from handshake import do_handshake
+from message import MsgID, decode_message, recv_bitfield, recv_unchoke, send_interested, send_request
 from metainfo import get_infohash, get_metainfo, parse_metainfo_pieces, print_info
-from peers import get_peers, print_peers
-
-
-class MsgID(IntEnum):
-    KEEPALIVE = -1
-    UNCHOKE = 1
-    INTERESTED = 2
-    BITFIELD = 5
-    REQUEST = 6
-    PIECE = 7
-
-
-def encode_message(id: int=None, payload: bytes=b"") -> bytes:
-    payload_length = len(payload)
-    message = bytearray(4 + (1 if id else 0) + payload_length)
-    message[:4] = struct.pack("!I", (1 if id else 0) + payload_length)
-    if id:
-        message[4] = id
-    if payload_length > 0:
-        message[5:] = payload
-    return message
-
-
-def decode_message(message: bytes) -> tuple[int, bytes]:
-    if len(message) < 4:
-        # Signal incomplete message
-        raise IndexError
-    payload_length = struct.unpack("!I", message[:4])[0]
-    if payload_length > 0:
-        id = message[4] if payload_length > 1 else  -1
-        payload = message[5:4+payload_length] if payload_length > 1 else b""
-    return id, payload
-
-
-def recv_bitfield(sock: socket.SocketType) -> bytes:
-    id, bitfield = decode_message(sock.recv(1024))
-    assert id == MsgID.BITFIELD
-    return bitfield
-
-
-def get_peers_info(peers: list[tuple[str, int]], info_hash: bytes, peer_id: bytes) -> dict[tuple[str, int], tuple[bytes, bytes]]:
-    peers_info = {}
-    for peer in peers:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect(peer)
-            r_peer_id, _ = do_handshake(sock, info_hash, peer_id)
-            r_bitfield = recv_bitfield(sock)
-            sock.close()
-            peers_info[peer] = (r_peer_id, r_bitfield)
-    return peers_info
+from peers import get_peer_info, get_peers, print_peers
 
 
 def has_bitfield_piece(bitfield: bytes, piece_index: int) -> bool:
     bitfield_index = piece_index // 8
     byte_mask = 1 << (7 - piece_index % 8)
     return (bitfield[bitfield_index] & byte_mask) != 0
-
-
-def send_interested(sock: socket.SocketType) -> None:
-    sock.send(encode_message(MsgID.INTERESTED, b""))
-
-
-def recv_unchoke(sock: socket.SocketType) -> None:
-    id, payload = decode_message(sock.recv(1024))
-    assert id == MsgID.UNCHOKE
-    assert len(payload) == 0
-
-
-def send_request(sock: socket.SocketType, index: int, begin: int, length: int) -> None:
-    msg_req = struct.pack("!IbIII", 13, MsgID.REQUEST, index, begin, length)
-    sock.send(msg_req)
 
 
 def recv_piece_chunk(sock: socket.SocketType, msg_length: int, chunk_length: int) -> tuple[int, int, bytes]:
@@ -199,7 +135,7 @@ def main() -> None:
                 print(f"Piece {piece_index} not found in torrent")
 
             peers = get_peers(metainfo, peer_id)
-            peers_info = get_peers_info(peers, info_hash, peer_id)
+            peers_info = {peer: get_peer_info(peer, info_hash, peer_id)}
             peers_valid = [peer for peer in peers if has_bitfield_piece(peers_info[peer][1], piece_index)]
             if peers_valid:
                 peer = peers_valid[0]
