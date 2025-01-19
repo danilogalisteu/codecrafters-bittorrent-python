@@ -166,6 +166,25 @@ def send_handshake(sock: socket.SocketType, peer_id: bytes, info_hash: bytes) ->
     return r_peer_id
 
 
+def encode_message(id: int=None, payload: bytes=b"") -> bytes:
+    payload_length = len(payload)
+    message = bytearray(4 + (1 if id else 0) + payload_length)
+    message[:4] = struct.pack("!I", (1 if id else 0) + payload_length)
+    if id:
+        message[4] = id
+    if payload_length > 0:
+        message[5:] = payload
+    return message
+
+
+def decode_message(message: bytes) -> tuple[int, bytes]:
+    payload_length = struct.unpack("!I", message[:4])[0]
+    if payload_length > 0:
+        id = message[4]
+        payload = message[5:4+payload_length] if payload_length > 1 else b""
+    return id, payload
+
+
 def main() -> None:
     peer_id = secrets.token_bytes(20)
 
