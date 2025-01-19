@@ -4,12 +4,11 @@ import hashlib
 import secrets
 import socket
 import struct
-import urllib.parse
-import urllib.request
 from enum import IntEnum
 
 from bencode import encode_bencode, decode_bencode
 from metainfo import get_metainfo, parse_metainfo_pieces, print_info
+from peers import get_peers, print_peers
 
 
 class MsgID(IntEnum):
@@ -19,31 +18,6 @@ class MsgID(IntEnum):
     BITFIELD = 5
     REQUEST = 6
     PIECE = 7
-
-
-def get_peers(metainfo: dict, peer_id: bytes, port: int=6881) -> list[tuple[str, int]]:
-    query = {
-        "info_hash": hashlib.sha1(encode_bencode(metainfo["info"])).digest(),
-        "peer_id": peer_id,
-        "port": port,
-        "uploaded": 0,
-        "downloaded": 0,
-        "left": metainfo['info']['length'],
-        "compact": 1,
-    }
-    url = metainfo['announce'] + "?" + urllib.parse.urlencode(query)
-    res, _ = decode_bencode(urllib.request.urlopen(url).read())
-
-    peers = []
-    if "peers" in res:
-        pos = 0
-        while pos < len(res["peers"]):
-            peer_ip = ".".join(map(str, res['peers'][pos:pos+4]))
-            peer_port = int.from_bytes(res['peers'][pos+4:pos+6], 'big')
-            peers.append((peer_ip, peer_port))
-            pos += 6
-
-    return peers
 
 
 def encode_handshake(info_hash: bytes, peer_id: bytes) -> bytes:
@@ -228,8 +202,8 @@ def main() -> None:
         file_name = sys.argv[2]
         metainfo = get_metainfo(file_name)
         if metainfo:
-            for peer in get_peers(metainfo, peer_id, port=6881):
-                print(f"{peer[0]}:{peer[1]}")
+            peers = get_peers(metainfo, peer_id, port=6881)
+            print_peers(peers)
 
     elif command == "handshake":
         file_name = sys.argv[2]
