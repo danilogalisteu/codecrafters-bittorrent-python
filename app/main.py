@@ -206,6 +206,21 @@ def send_request(sock: socket.SocketType, index: int, begin: int, length: int) -
     sock.send(msg_req)
 
 
+def receive_piece_chunk(sock: socket.SocketType, msg_length: int, chunk_length: int) -> tuple[int, int, bytes]:
+    msg = b""
+    msg_total = 0
+    while msg_total < chunk_length:
+        chunk = sock.recv(msg_length)
+        msg += chunk
+        msg_total += len(chunk)
+    id, payload = decode_message(msg)
+    assert id == MsgID.PIECE
+    index = struct.unpack("!I", payload[0:4])[0]
+    begin = struct.unpack("!I", payload[4:8])[0]
+    block = payload[8:]
+    return index, begin, block
+
+
 def main() -> None:
     peer_id = secrets.token_bytes(20)
 
