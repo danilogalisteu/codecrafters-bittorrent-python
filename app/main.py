@@ -6,7 +6,7 @@ import socket
 import struct
 from enum import IntEnum
 
-from bencode import encode_bencode, decode_bencode
+from bencode import decode_bencode
 from metainfo import get_infohash, get_metainfo, parse_metainfo_pieces, print_info
 from peers import get_peers, print_peers
 
