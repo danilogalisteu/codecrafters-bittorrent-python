@@ -94,7 +94,6 @@ def parse_metainfo_pieces(pieces: bytes) -> list[bytes]:
 def get_metainfo(file_name: str) -> dict:
     with open(file_name, "rb") as file:
         metainfo, _ = decode_bencode(file.read())
-        metainfo["info"]["pieces"] = parse_metainfo_pieces(metainfo["info"]["pieces"])
         return metainfo
 
 
@@ -105,14 +104,14 @@ def print_info(metainfo: dict):
     print(f"Info Hash: {hash}")
     print(f"Piece Length: {metainfo['info']['piece length']}")
     print("Piece Hashes:")
-    for piece in metainfo["info"]["pieces"]:
+    for piece in parse_metainfo_pieces(metainfo["info"]["pieces"]):
         print(piece.hex())
 
 
-def get_peers(metainfo: dict, port: int=6881) -> list[tuple[str, int]]:
+def get_peers(metainfo: dict, peer_id: bytes, port: int=6881) -> list[tuple[str, int]]:
     query = {
         "info_hash": hashlib.sha1(encode_bencode(metainfo["info"])).digest(),
-        "peer_id": secrets.token_urlsafe(20)[:20],
+        "peer_id": peer_id,
         "port": port,
         "uploaded": 0,
         "downloaded": 0,
@@ -122,13 +121,14 @@ def get_peers(metainfo: dict, port: int=6881) -> list[tuple[str, int]]:
     url = metainfo['announce'] + "?" + urllib.parse.urlencode(query)
     res, _ = decode_bencode(urllib.request.urlopen(url).read())
 
-    pos = 0
     peers = []
-    while pos < len(res["peers"]):
-        peer_ip = ".".join(map(str, res['peers'][pos:pos+4]))
-        peer_port = int.from_bytes(res['peers'][pos+4:pos+6], 'big')
-        peers.append((peer_ip, peer_port))
-        pos += 6
+    if "peers" in res:
+        pos = 0
+        while pos < len(res["peers"]):
+            peer_ip = ".".join(map(str, res['peers'][pos:pos+4]))
+            peer_port = int.from_bytes(res['peers'][pos+4:pos+6], 'big')
+            peers.append((peer_ip, peer_port))
+            pos += 6
 
     return peers
 
@@ -158,9 +158,7 @@ def decode_handshake(data: bytes) -> tuple[bytes, bytes]:
     return r_info_hash, r_peer_id
 
 
-def send_handshake(sock: socket.SocketType, info_hash_str: str) -> bytes:
-    info_hash = hashlib.sha1(encode_bencode(info_hash_str)).digest()
-    peer_id = secrets.token_bytes(20)
+def send_handshake(sock: socket.SocketType, peer_id: bytes, info_hash: bytes) -> bytes:
     message = encode_handshake(info_hash, peer_id)
     sock.send(message)
     r_info_hash, r_peer_id = decode_handshake(sock.recv(1024))
@@ -169,6 +167,8 @@ def send_handshake(sock: socket.SocketType, info_hash_str: str) -> bytes:
 
 
 def main() -> None:
+    peer_id = secrets.token_bytes(20)
+
     command = sys.argv[1]
 
     if command == "decode":
@@ -196,7 +196,7 @@ def main() -> None:
         file_name = sys.argv[2]
         metainfo = get_metainfo(file_name)
         if metainfo:
-            for peer in get_peers(metainfo, port=6881):
+            for peer in get_peers(metainfo, peer_id, port=6881):
                 print(f"{peer[0]}:{peer[1]}")
 
     elif command == "handshake":
@@ -207,9 +207,10 @@ def main() -> None:
         peer_port = int(peer_host_port[peer_sep_index+1:])
         metainfo = get_metainfo(file_name)
         if metainfo:
+            info_hash = hashlib.sha1(encode_bencode(metainfo["info"])).digest()
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.connect((peer_host, peer_port))
-                r_peer_id = send_handshake(sock, metainfo["info"])
+                r_peer_id = send_handshake(sock, peer_id, info_hash)
                 sock.close()
                 print(f"Peer ID: {r_peer_id.hex()}")
 
