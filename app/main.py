@@ -326,6 +326,9 @@ def main() -> None:
 
                     piece = recv_piece(sock, metainfo, piece_index)
 
+                    with open(piece_file_name, "wb") as file:
+                        file.write(piece)
+
                     sock.close()
 
     else:
