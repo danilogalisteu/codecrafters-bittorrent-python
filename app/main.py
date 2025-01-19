@@ -158,7 +158,7 @@ def decode_handshake(data: bytes) -> tuple[bytes, bytes]:
     return r_info_hash, r_peer_id
 
 
-def send_handshake(sock: socket.SocketType, peer_id: bytes, info_hash: bytes) -> bytes:
+def send_handshake(sock: socket.SocketType, info_hash: bytes, peer_id: bytes) -> bytes:
     message = encode_handshake(info_hash, peer_id)
     sock.send(message)
     r_info_hash, r_peer_id = decode_handshake(sock.recv(1024))
@@ -206,6 +206,21 @@ def send_request(sock: socket.SocketType, index: int, begin: int, length: int) -
     sock.send(msg_req)
 
 
+def receive_piece_chunk(sock: socket.SocketType, msg_length: int, chunk_length: int) -> tuple[int, int, bytes]:
+    msg = b""
+    msg_total = 0
+    while msg_total < chunk_length:
+        chunk = sock.recv(msg_length)
+        msg += chunk
+        msg_total += len(chunk)
+    id, payload = decode_message(msg)
+    assert id == MsgID.PIECE
+    index = struct.unpack("!I", payload[0:4])[0]
+    begin = struct.unpack("!I", payload[4:8])[0]
+    block = payload[8:]
+    return index, begin, block
+
+
 def recv_piece(sock: socket.SocketType, metainfo: dict, piece_index: int) -> bytes:
     pieces = parse_metainfo_pieces(metainfo["info"]["pieces"])
     assert piece_index < len(pieces)
@@ -236,21 +251,6 @@ def recv_piece(sock: socket.SocketType, metainfo: dict, piece_index: int) -> byt
     assert r_piece_hash == piece_hash
 
     return piece
-
-
-def receive_piece_chunk(sock: socket.SocketType, msg_length: int, chunk_length: int) -> tuple[int, int, bytes]:
-    msg = b""
-    msg_total = 0
-    while msg_total < chunk_length:
-        chunk = sock.recv(msg_length)
-        msg += chunk
-        msg_total += len(chunk)
-    id, payload = decode_message(msg)
-    assert id == MsgID.PIECE
-    index = struct.unpack("!I", payload[0:4])[0]
-    begin = struct.unpack("!I", payload[4:8])[0]
-    block = payload[8:]
-    return index, begin, block
 
 
 def main() -> None:
@@ -297,7 +297,7 @@ def main() -> None:
             info_hash = hashlib.sha1(encode_bencode(metainfo["info"])).digest()
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.connect((peer_host, peer_port))
-                r_peer_id = send_handshake(sock, peer_id, info_hash)
+                r_peer_id = send_handshake(sock, info_hash, peer_id)
                 sock.close()
                 print(f"Peer ID: {r_peer_id.hex()}")
 
@@ -316,7 +316,7 @@ def main() -> None:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     sock.connect(peers[0])
 
-                    r_peer_id = send_handshake(sock, peer_id, info_hash)
+                    r_peer_id = send_handshake(sock, info_hash, peer_id)
 
                     _ = recv_bitfield(sock)
 
@@ -326,10 +326,10 @@ def main() -> None:
 
                     piece = recv_piece(sock, metainfo, piece_index)
 
+                    sock.close()
+
                     with open(piece_file_name, "wb") as file:
                         file.write(piece)
-
-                    sock.close()
 
     else:
         raise NotImplementedError(f"Unknown command {command}")
