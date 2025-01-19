@@ -40,16 +40,16 @@ def decode_message(buffer: bytes) -> tuple[int, bytes]:
     return id, payload
 
 
-def recv_message(recv_id: int, sock: socket.SocketType, buffer: bytes) -> bytes:
+def recv_message(recv_id: int, sock: socket.SocketType, buffer: bytes, recv_length: int=1024) -> bytes:
     while True:
         try:
             id, payload = decode_message(buffer)
-            # Drop parsed data
+            # Drop parsed data from buffer
             parsed_length = 4 + (1 if id > -1 else 0) + len(payload)
             buffer = buffer[parsed_length:] if len(buffer) > parsed_length else b""
         except IndexError:
             # Incomplete message
-            buffer += sock.recv(1024)
+            buffer += sock.recv(recv_length)
             continue
         if id == recv_id:
             break
@@ -58,8 +58,3 @@ def recv_message(recv_id: int, sock: socket.SocketType, buffer: bytes) -> bytes:
 
 def send_message(send_id: int, sock: socket.SocketType, payload: bytes=b""):
     sock.send(encode_message(send_id, payload))
-
-
-def send_request(sock: socket.SocketType, index: int, begin: int, length: int) -> None:
-    msg_req = struct.pack("!IbIII", 13, MsgID.REQUEST, index, begin, length)
-    sock.send(msg_req)

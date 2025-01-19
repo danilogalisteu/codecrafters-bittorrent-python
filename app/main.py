@@ -84,12 +84,12 @@ def main() -> None:
                     payload = recv_message(MsgID.UNCHOKE, sock, comm_buffer)
                     assert len(payload) == 0
 
-                    # piece = recv_piece(sock, metainfo, piece_index)
+                    piece = recv_piece(sock, metainfo, piece_index)
 
                     sock.close()
 
-                    # with open(piece_file_name, "wb") as file:
-                    #     file.write(piece)
+                    with open(piece_file_name, "wb") as file:
+                        file.write(piece)
 
     else:
         raise NotImplementedError(f"Unknown command {command}")
