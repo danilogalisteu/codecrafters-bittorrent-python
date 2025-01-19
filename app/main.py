@@ -10,6 +10,7 @@ from enum import IntEnum
 
 
 class MsgID(IntEnum):
+    KEEPALIVE = -1
     UNCHOKE = 1
     INTERESTED = 2
     BITFIELD = 5
@@ -183,7 +184,7 @@ def decode_message(message: bytes) -> tuple[int, bytes]:
         raise IndexError
     payload_length = struct.unpack("!I", message[:4])[0]
     if payload_length > 0:
-        id = message[4]
+        id = message[4] if payload_length > 1 else  -1
         payload = message[5:4+payload_length] if payload_length > 1 else b""
     return id, payload
 
