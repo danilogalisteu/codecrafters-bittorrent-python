@@ -19,10 +19,6 @@ def main() -> None:
     if command == "decode":
         bencoded_value = sys.argv[2].encode()
 
-        # json.dumps() can't handle bytes, but bencoded "strings" need to be
-        # bytestrings since they might contain non utf-8 characters.
-        #
-        # Let's convert them to strings for printing to the console.
         def bytes_to_str(data):
             if isinstance(data, bytes):
                 return data.decode()
@@ -46,18 +42,16 @@ def main() -> None:
 
     elif command == "handshake":
         file_name = sys.argv[2]
-        peer_host_port = sys.argv[3]
-        peer_sep_index = peer_host_port.find(":")
-        peer_host = peer_host_port[:peer_sep_index]
-        peer_port = int(peer_host_port[peer_sep_index+1:])
+        peer_host_port = sys.argv[3].split(":")
+        peer = peer_host_port[0], int(peer_host_port[1])
         metainfo = get_metainfo(file_name)
         if metainfo:
             info_hash = get_infohash(metainfo)
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect((peer_host, peer_port))
+                sock.connect(peer)
                 r_peer_id, _ = do_handshake(sock, info_hash, peer_id)
                 sock.close()
-            print(f"Peer ID: {r_peer_id.hex()}")
+                print(f"Peer ID: {r_peer_id.hex()}")
 
     elif command == "download_piece":
         piece_file_name = sys.argv[3]
