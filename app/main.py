@@ -225,6 +225,13 @@ def main() -> None:
                 print(f"Piece {piece_index} not found in torrent")
 
             peers = get_peers(metainfo, peer_id)
+            if peers:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.connect(peers[0])
+
+                    r_peer_id = send_handshake(sock, peer_id, info_hash)
+
+                    sock.close()
 
     else:
         raise NotImplementedError(f"Unknown command {command}")
