@@ -18,11 +18,14 @@ def get_metainfo(file_name: str) -> dict:
         return metainfo
 
 
+def get_infohash(metainfo: dict) -> bytes:
+    return hashlib.sha1(encode_bencode(metainfo["info"])).digest()
+
+
 def print_info(metainfo: dict):
-    hash = hashlib.sha1(encode_bencode(metainfo["info"])).hexdigest()
     print(f"Tracker URL: {metainfo['announce']}")
     print(f"Length: {metainfo['info']['length']}")
-    print(f"Info Hash: {hash}")
+    print(f"Info Hash: {get_infohash(metainfo).hex()}")
     print(f"Piece Length: {metainfo['info']['piece length']}")
     print("Piece Hashes:")
     for piece in parse_metainfo_pieces(metainfo["info"]["pieces"]):
