@@ -87,6 +87,28 @@ def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, pee
                     file.write(piece)
 
 
+def run_download(out_file: str, torrent_file: str, peer_id: bytes):
+    metainfo = get_metainfo(torrent_file)
+    if metainfo:
+        info_hash = get_infohash(metainfo)
+        pieces_hash = parse_metainfo_pieces(metainfo["info"]["pieces"])
+
+        peers = get_peers(metainfo, peer_id)
+        peers_info = {
+            peer: get_peer_info(peer, info_hash, peer_id)
+            for peer in peers
+        }
+        peers_pieces = {
+            peer: [
+                piece_index
+                for piece_index in range(len(pieces_hash))
+                if has_bitfield_piece(info[1], piece_index)
+            ]
+            for peer, info in peers_info.items()
+        }
+        print(peers_pieces)
+
+
 def make_parser(peer_id: bytes):
     parser = argparse.ArgumentParser(prog="app.main", description="Basic bittorrent client")
     subparsers = parser.add_subparsers(title="command", description="valid commands", required=True)
@@ -133,6 +155,15 @@ def make_parser(peer_id: bytes):
     parser_piece.add_argument("torrent_file", type=str, help="path to torrent file")
     parser_piece.add_argument("piece_index", type=int, help="index of the piece (starting at 0)")
     parser_piece.set_defaults(command_cb=run_download_piece, peer_id=peer_id)
+
+    parser_file = subparsers.add_parser(
+        "download",
+        description="download file",
+        help="download file",
+    )
+    parser_file.add_argument("-o", type=str, required=True, dest="out_file", metavar="out_file", help="path to piece file (will be overwritten)")
+    parser_file.add_argument("torrent_file", type=str, help="path to torrent file")
+    parser_file.set_defaults(command_cb=run_download, peer_id=peer_id)
 
     return parser
 
