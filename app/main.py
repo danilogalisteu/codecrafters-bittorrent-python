@@ -191,6 +191,18 @@ def recv_bitfield(sock: socket.SocketType) -> bytes:
     return bitfield
 
 
+def get_peers_info(peers: list[tuple[str, int]], info_hash: bytes, peer_id: bytes) -> dict[tuple[str, int], tuple[bytes, bytes]]:
+    peers_info = {}
+    for peer in peers:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect(peer)
+            r_peer_id = send_handshake(sock, info_hash, peer_id)
+            r_bitfield = recv_bitfield(sock)
+            sock.close()
+            peers_info[peer] = (r_peer_id, r_bitfield)
+    return peers_info
+
+
 def send_interested(sock: socket.SocketType) -> None:
     sock.send(encode_message(MsgID.INTERESTED, b""))
 
@@ -312,6 +324,8 @@ def main() -> None:
                 print(f"Piece {piece_index} not found in torrent")
 
             peers = get_peers(metainfo, peer_id)
+            peers_info = get_peers_info(peers, info_hash, peer_id)
+            print(peers_info)
             if peers:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     sock.connect(peers[0])
