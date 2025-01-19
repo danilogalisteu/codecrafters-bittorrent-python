@@ -201,6 +201,11 @@ def recv_unchoke(sock: socket.SocketType) -> None:
     assert len(payload) == 0
 
 
+def send_request(sock: socket.SocketType, index: int, begin: int, length: int) -> None:
+    msg_req = struct.pack("!IbIII", 13, MsgID.REQUEST, index, begin, length)
+    sock.send(msg_req)
+
+
 def main() -> None:
     peer_id = secrets.token_bytes(20)
 
