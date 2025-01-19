@@ -195,6 +195,12 @@ def send_interested(sock: socket.SocketType) -> None:
     sock.send(encode_message(MsgID.INTERESTED, b""))
 
 
+def recv_unchoke(sock: socket.SocketType) -> None:
+    id, payload = decode_message(sock.recv(1024))
+    assert id == MsgID.UNCHOKE
+    assert len(payload) == 0
+
+
 def main() -> None:
     peer_id = secrets.token_bytes(20)
 
@@ -263,6 +269,8 @@ def main() -> None:
                     _ = recv_bitfield(sock)
 
                     send_interested(sock)
+
+                    recv_unchoke(sock)
 
                     sock.close()
 
