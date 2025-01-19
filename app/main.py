@@ -3,6 +3,7 @@ import sys
 import hashlib
 import secrets
 import socket
+import struct
 import urllib.parse
 import urllib.request
 
@@ -115,11 +116,11 @@ def get_peers(metainfo: dict, port: int=6881) -> list[tuple[str, int]]:
     return peers
 
 
-def get_handshake(host: str, port: int, metainfo: dict) -> bytes:
+def get_handshake(host: str, port: int, info_hash_str: str) -> bytes:
     pstr = b"BitTorrent protocol"
     pstrlen = len(pstr)
     reserved = b"\x00\x00\x00\x00\x00\x00\x00\x00"
-    info_hash = hashlib.sha1(encode_bencode(metainfo["info"])).digest()
+    info_hash = hashlib.sha1(encode_bencode(info_hash_str)).digest()
     peer_id = secrets.token_bytes(20)
     message = bytearray(49 + pstrlen)
     message[0] = pstrlen
@@ -132,6 +133,7 @@ def get_handshake(host: str, port: int, metainfo: dict) -> bytes:
         s.connect((host, port))
         s.send(message)
         data = s.recv(1024)
+        s.close()
         r_pstrlen = data[0]
         r_pstr = data[1:1+r_pstrlen]
         assert pstr == r_pstr
@@ -180,8 +182,9 @@ def main() -> None:
         peer_host = peer_host_port[:peer_sep_index]
         peer_port = int(peer_host_port[peer_sep_index+1:])
         metainfo = get_metainfo(file_name)
-        r_peer_id = get_handshake(peer_host, peer_port, metainfo)
-        print(f"Peer ID: {r_peer_id.hex()}")
+        if metainfo:
+            r_peer_id = get_handshake(peer_host, peer_port, metainfo["info"])
+            print(f"Peer ID: {r_peer_id.hex()}")
 
     else:
         raise NotImplementedError(f"Unknown command {command}")
