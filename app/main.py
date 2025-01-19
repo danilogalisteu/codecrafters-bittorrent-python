@@ -224,7 +224,7 @@ def send_request(sock: socket.SocketType, index: int, begin: int, length: int) -
     sock.send(msg_req)
 
 
-def receive_piece_chunk(sock: socket.SocketType, msg_length: int, chunk_length: int) -> tuple[int, int, bytes]:
+def recv_piece_chunk(sock: socket.SocketType, msg_length: int, chunk_length: int) -> tuple[int, int, bytes]:
     msg = b""
     msg_total = 0
     while msg_total < chunk_length:
@@ -244,7 +244,7 @@ def recv_piece(sock: socket.SocketType, metainfo: dict, piece_index: int) -> byt
     assert piece_index < len(pieces)
     piece_hash = pieces[piece_index]
 
-    if piece_index < len(metainfo["info"]["pieces"]) - 1:
+    if piece_index < len(pieces) - 1:
         total_length = metainfo["info"]["piece length"]
     else:
         total_length = metainfo["info"]["length"] - metainfo["info"]["piece length"] * (len(pieces) - 1)
@@ -258,7 +258,7 @@ def recv_piece(sock: socket.SocketType, metainfo: dict, piece_index: int) -> byt
 
         send_request(sock, piece_index, current_begin, eff_chunk_length)
 
-        r_index, r_begin, r_block = receive_piece_chunk(sock, msg_length, eff_chunk_length)
+        r_index, r_begin, r_block = recv_piece_chunk(sock, msg_length, eff_chunk_length)
         assert r_index == piece_index
         assert r_begin == current_begin
 
@@ -333,12 +333,14 @@ def main() -> None:
             peers_info = get_peers_info(peers, info_hash, peer_id)
             peers_valid = [peer for peer in peers if has_bitfield_piece(peers_info[peer][1], piece_index)]
             if peers_valid:
+                peer = peers_valid[0]
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.connect(peers_valid[0])
+                    sock.connect(peer)
 
-                    r_peer_id = send_handshake(sock, info_hash, peer_id)
+                    _ = send_handshake(sock, info_hash, peer_id)
 
-                    _ = recv_bitfield(sock)
+                    bitfield = recv_bitfield(sock)
+                    assert has_bitfield_piece(bitfield, piece_index)
 
                     send_interested(sock)
 
