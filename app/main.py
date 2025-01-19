@@ -206,6 +206,38 @@ def send_request(sock: socket.SocketType, index: int, begin: int, length: int) -
     sock.send(msg_req)
 
 
+def recv_piece(sock: socket.SocketType, metainfo: dict, piece_index: int) -> bytes:
+    pieces = parse_metainfo_pieces(metainfo["info"]["pieces"])
+    assert piece_index < len(pieces)
+    piece_hash = pieces[piece_index]
+
+    if piece_index < len(metainfo["info"]["pieces"]) - 1:
+        total_length = metainfo["info"]["piece length"]
+    else:
+        total_length = metainfo["info"]["length"] - metainfo["info"]["piece length"] * (len(pieces) - 1)
+
+    piece = b""
+    msg_length = 4*1024
+    chunk_length = 16*1024
+    current_begin = 0
+    while current_begin < total_length:
+        eff_chunk_length = min(chunk_length, total_length - current_begin)
+
+        send_request(sock, piece_index, current_begin, eff_chunk_length)
+
+        r_index, r_begin, r_block = receive_piece_chunk(sock, msg_length, eff_chunk_length)
+        assert r_index == piece_index
+        assert r_begin == current_begin
+
+        piece += r_block
+        current_begin += len(r_block)
+
+    r_piece_hash = hashlib.sha1(piece).digest()
+    assert r_piece_hash == piece_hash
+
+    return piece
+
+
 def receive_piece_chunk(sock: socket.SocketType, msg_length: int, chunk_length: int) -> tuple[int, int, bytes]:
     msg = b""
     msg_total = 0
@@ -291,6 +323,8 @@ def main() -> None:
                     send_interested(sock)
 
                     recv_unchoke(sock)
+
+                    piece = recv_piece(sock, metainfo, piece_index)
 
                     sock.close()
 
