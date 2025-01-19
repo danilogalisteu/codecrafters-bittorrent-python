@@ -6,6 +6,15 @@ import socket
 import struct
 import urllib.parse
 import urllib.request
+from enum import IntEnum
+
+
+class MsgID(IntEnum):
+    UNCHOKE = 1
+    INTERESTED = 2
+    BITFIELD = 5
+    REQUEST = 6
+    PIECE = 7
 
 
 def encode_bencode(value: str | bytes | int | list | dict) -> bytes:
@@ -73,9 +82,19 @@ def decode_bencode(bencoded_value: bytes, pos: int=0) -> tuple[str, int] | tuple
         raise NotImplementedError("Only strings are supported at the moment")
 
 
+def parse_metainfo_pieces(pieces: bytes) -> list[bytes]:
+    pos = 0
+    pieces_list = []
+    while pos < len(pieces):
+        pieces_list.append(pieces[pos:pos+20])
+        pos += 20
+    return pieces_list
+
+
 def get_metainfo(file_name: str) -> dict:
     with open(file_name, "rb") as file:
         metainfo, _ = decode_bencode(file.read())
+        metainfo["info"]["pieces"] = parse_metainfo_pieces(metainfo["info"]["pieces"])
         return metainfo
 
 
@@ -86,10 +105,8 @@ def print_info(metainfo: dict):
     print(f"Info Hash: {hash}")
     print(f"Piece Length: {metainfo['info']['piece length']}")
     print("Piece Hashes:")
-    pos = 0
-    while pos < len(metainfo["info"]["pieces"]):
-        print(metainfo["info"]["pieces"][pos:pos+20].hex())
-        pos += 20
+    for piece in metainfo["info"]["pieces"]:
+        print(piece.hex())
 
 
 def get_peers(metainfo: dict, port: int=6881) -> list[tuple[str, int]]:
