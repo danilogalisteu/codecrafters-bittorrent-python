@@ -185,6 +185,12 @@ def decode_message(message: bytes) -> tuple[int, bytes]:
     return id, payload
 
 
+def recv_bitfield(sock: socket.SocketType) -> bytes:
+    id, bitfield = decode_message(sock.recv(1024))
+    assert id == MsgID.BITFIELD
+    return bitfield
+
+
 def main() -> None:
     peer_id = secrets.token_bytes(20)
 
@@ -249,6 +255,8 @@ def main() -> None:
                     sock.connect(peers[0])
 
                     r_peer_id = send_handshake(sock, peer_id, info_hash)
+
+                    _ = recv_bitfield(sock)
 
                     sock.close()
 
