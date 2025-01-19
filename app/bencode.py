@@ -1,5 +1,3 @@
-
-
 def encode_bencode(value: str | bytes | int | list | dict) -> bytes:
     if isinstance(value, str):
         value_array = value.encode()

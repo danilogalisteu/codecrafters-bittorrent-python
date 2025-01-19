@@ -45,3 +45,9 @@ def get_peer_info(peer: tuple[str, int], info_hash: bytes, peer_id: bytes) -> tu
         r_bitfield = recv_bitfield(sock)
         sock.close()
         return r_peer_id, r_bitfield
+
+
+def has_bitfield_piece(bitfield: bytes, piece_index: int) -> bool:
+    bitfield_index = piece_index // 8
+    byte_mask = 1 << (7 - piece_index % 8)
+    return (bitfield[bitfield_index] & byte_mask) != 0

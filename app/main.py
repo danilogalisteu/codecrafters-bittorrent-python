@@ -9,13 +9,7 @@ from bencode import decode_bencode
 from handshake import do_handshake
 from message import MsgID, decode_message, recv_bitfield, recv_unchoke, send_interested, send_request
 from metainfo import get_infohash, get_metainfo, parse_metainfo_pieces, print_info
-from peers import get_peer_info, get_peers, print_peers
-
-
-def has_bitfield_piece(bitfield: bytes, piece_index: int) -> bool:
-    bitfield_index = piece_index // 8
-    byte_mask = 1 << (7 - piece_index % 8)
-    return (bitfield[bitfield_index] & byte_mask) != 0
+from peers import get_peer_info, get_peers, has_bitfield_piece, print_peers
 
 
 def recv_piece_chunk(sock: socket.SocketType, msg_length: int, chunk_length: int) -> tuple[int, int, bytes]:
@@ -135,7 +129,7 @@ def main() -> None:
                 print(f"Piece {piece_index} not found in torrent")
 
             peers = get_peers(metainfo, peer_id)
-            peers_info = {peer: get_peer_info(peer, info_hash, peer_id)}
+            peers_info = {peer: get_peer_info(peer, info_hash, peer_id) for peer in peers}
             peers_valid = [peer for peer in peers if has_bitfield_piece(peers_info[peer][1], piece_index)]
             if peers_valid:
                 peer = peers_valid[0]
