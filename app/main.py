@@ -214,6 +214,18 @@ def main() -> None:
                 sock.close()
                 print(f"Peer ID: {r_peer_id.hex()}")
 
+    elif command == "download_piece":
+        piece_file_name = sys.argv[3]
+        torrent_file_name = sys.argv[4]
+        piece_index = int(sys.argv[5])
+        metainfo = get_metainfo(torrent_file_name)
+        if metainfo:
+            info_hash = hashlib.sha1(encode_bencode(metainfo["info"])).digest()
+            if piece_index >= len(metainfo["info"]["pieces"]):
+                print(f"Piece {piece_index} not found in torrent")
+
+            peers = get_peers(metainfo, peer_id)
+
     else:
         raise NotImplementedError(f"Unknown command {command}")
 
