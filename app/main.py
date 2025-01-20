@@ -76,6 +76,7 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
     metainfo = get_metainfo(torrent_file)
     if metainfo:
         def peer_worker(address: tuple[str, int], metainfo: dict, peer_id: bytes, jobs: queue.Queue, results: queue.Queue):
+            print("starting peer", address)
             peer = Peer(address, metainfo, peer_id)
             while True:
                 piece_index = jobs.get()
