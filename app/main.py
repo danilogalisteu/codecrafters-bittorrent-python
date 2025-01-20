@@ -8,6 +8,7 @@ import threading
 
 from .protocol.bencode import decode_bencode
 from .protocol.handshake import do_handshake
+from .protocol.magnet import parse_magnet
 from .protocol.metainfo import get_infohash, get_metainfo, parse_metainfo_pieces, print_info
 from .protocol.peer import Peer, get_peers, print_peers
 
@@ -110,6 +111,13 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
                     file.write(piece)
 
 
+def run_magnet_parse(link: str):
+    _, trackers, info_hash = parse_magnet(link)
+    print("Tracker URL:", trackers[0])
+    print("Info Hash:", info_hash)
+
+
+
 def make_parser(peer_id: bytes):
     parser = argparse.ArgumentParser(prog="app.main", description="Basic bittorrent client")
     subparsers = parser.add_subparsers(title="command", description="valid commands", required=True)
@@ -165,6 +173,14 @@ def make_parser(peer_id: bytes):
     parser_file.add_argument("-o", type=str, required=True, dest="out_file", metavar="out_file", help="path to piece file (will be overwritten)")
     parser_file.add_argument("torrent_file", type=str, help="path to torrent file")
     parser_file.set_defaults(command_cb=run_download, peer_id=peer_id)
+
+    parser_magnet = subparsers.add_parser(
+        "magnet_parse",
+        description="parse magnet link",
+        help="parse magnet link",
+    )
+    parser_magnet.add_argument("link", type=str, help="magnet link")
+    parser_magnet.set_defaults(command_cb=run_magnet_parse)
 
     return parser
 
