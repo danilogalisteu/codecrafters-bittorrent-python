@@ -57,6 +57,8 @@ class Peer():
         self.info_hash = get_infohash(self.metainfo)
         self.pieces_hash = parse_metainfo_pieces(self.metainfo["info"]["pieces"])
         self.num_pieces = len(self.pieces_hash)
+        self.piece_length = self.metainfo["info"]["piece length"]
+        self.last_piece_length = self.metainfo["info"]["length"] - self.metainfo["info"]["piece length"] * (self.num_pieces - 1)
         self.peer_info = None
         self.peer_pieces = None
         self._initialized = False
@@ -67,7 +69,6 @@ class Peer():
             r_peer_id, _ = do_handshake(sock, self.info_hash, self.client_id)
             comm_buffer = b""
             r_bitfield = recv_message(MsgID.BITFIELD, sock, comm_buffer)
-            sock.close()
             return r_peer_id, r_bitfield
 
     def _has_bitfield_piece(self, bitfield: bytes, piece_index: int) -> bool:
@@ -115,7 +116,6 @@ class Peer():
                 payload = recv_message(MsgID.UNCHOKE, sock, comm_buffer)
                 assert len(payload) == 0
 
-                piece = recv_piece(sock, self.metainfo, piece_index)
-
-                sock.close()
-                return piece
+                piece_length = self.piece_length if piece_index < self.num_pieces - 1 else self.last_piece_length
+                
+                return recv_piece(sock, piece_index, self.pieces_hash[piece_index], piece_length)
