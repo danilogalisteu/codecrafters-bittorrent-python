@@ -50,26 +50,33 @@ def print_peers(peers: list[tuple[str, int]]):
 
 
 class Peer():
-    def __init__(self, address: tuple[str, int], metainfo: dict, client_id: bytes) -> None:
+    def __init__(
+        self,
+        address: tuple[str, int],
+        metainfo: dict,
+        client_id: bytes,
+        client_reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00"
+    ) -> None:
         self.address = address
         self.metainfo = metainfo
         self.client_id = client_id
+        self.client_reserved = client_reserved
         self.info_hash = get_infohash(self.metainfo)
         self.pieces_hash = parse_metainfo_pieces(self.metainfo["info"]["pieces"])
         self.num_pieces = len(self.pieces_hash)
         self.piece_length = self.metainfo["info"]["piece length"]
         self.last_piece_length = self.metainfo["info"]["length"] - self.metainfo["info"]["piece length"] * (self.num_pieces - 1)
-        self.peer_info = None
+        self.peer_id = None
+        self.reserved = None
+        self.bitfield = None
         self.peer_pieces = None
+        self._comm_buffer = b""
+        self._sock = None
         self._initialized = False
 
-    def _get_peer_info(self) -> tuple[bytes, bytes]:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect(self.address)
-            r_peer_id, _ = do_handshake(sock, self.info_hash, self.client_id)
-            comm_buffer = b""
-            r_bitfield = recv_message(MsgID.BITFIELD, sock, comm_buffer)
-            return r_peer_id, r_bitfield
+    def __del__(self):
+        if self._sock:
+            self._sock.close()
 
     def _has_bitfield_piece(self, bitfield: bytes, piece_index: int) -> bool:
         bitfield_index = piece_index // 8
@@ -77,45 +84,37 @@ class Peer():
         return (bitfield[bitfield_index] & byte_mask) != 0
 
     def initialize(self) -> None:
-        self.peer_info = self._get_peer_info()
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.connect(self.address)
+
+        # Get peer info
+        self.peer_id, self.reserved = do_handshake(self._sock, self.info_hash, self.client_id, self.client_reserved)
+        self.bitfield = recv_message(MsgID.BITFIELD, self._sock, self._comm_buffer)
+
         self.peer_pieces = [
             piece_index
             for piece_index in range(self.num_pieces)
-            if self._has_bitfield_piece(self.peer_info[1], piece_index)
+            if self._has_bitfield_piece(self.bitfield, piece_index)
         ]
 
-    def valid_piece(self, piece_index: int) -> bool:
-        return piece_index >= 0 and piece_index < self.num_pieces
+        self._initialized = True
 
     def has_piece(self, piece_index: int) -> bool:
-        if not self.valid_piece(piece_index):
+        if piece_index < 0 or piece_index >= self.num_pieces:
             return False
         if not self._initialized:
             self.initialize()
-            self._initialized = True
         return piece_index in self.peer_pieces
 
     def get_piece(self, piece_index: int) -> bytes | None:
-        if not self._initialized:
-            self.initialize()
-            self._initialized = True
+        if not self.has_piece(piece_index):
+            return
 
-        if self.has_piece(piece_index):
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect(self.address)
+        send_message(MsgID.INTERESTED, self._sock)
 
-                _, _ = do_handshake(sock, self.info_hash, self.client_id)
+        payload = recv_message(MsgID.UNCHOKE, self._sock, self._comm_buffer)
+        assert len(payload) == 0
 
-                comm_buffer = b""
-
-                bitfield = recv_message(MsgID.BITFIELD, sock, comm_buffer)
-                assert self._has_bitfield_piece(bitfield, piece_index)
-
-                send_message(MsgID.INTERESTED, sock)
-
-                payload = recv_message(MsgID.UNCHOKE, sock, comm_buffer)
-                assert len(payload) == 0
-
-                piece_length = self.piece_length if piece_index < self.num_pieces - 1 else self.last_piece_length
-                
-                return recv_piece(sock, piece_index, self.pieces_hash[piece_index], piece_length)
+        piece_length = self.piece_length if piece_index < self.num_pieces - 1 else self.last_piece_length
+        
+        return recv_piece(self._sock, piece_index, self.pieces_hash[piece_index], piece_length)
