@@ -140,14 +140,13 @@ def run_magnet_handshake(magnet_link: str, peer_id: bytes):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(peer)
             r_peer_id, r_reserved = do_handshake(sock, info_hash, peer_id, reserved_extensions)
-            supports_extension = ((r_reserved[5] >> 4) & 1) == 1
+            print(f"Peer ID: {r_peer_id.hex()}")
 
             comm_buffer = b""
+            supports_extension = ((r_reserved[5] >> 4) & 1) == 1
             if supports_extension:
                 r_extension_support = do_extension_handshake(sock, extension_support, comm_buffer)
-                print("r_extension_support", r_extension_support)
 
-            print(f"Peer ID: {r_peer_id.hex()}")
             print("Peer Metadata Extension ID:", r_extension_support["ut_metadata"])
 
 
