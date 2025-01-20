@@ -61,10 +61,11 @@ class Peer():
         self.client_id = client_id
         self.client_reserved = client_reserved
         self.info_hash = get_infohash(metainfo)
-        self.pieces_hash = parse_metainfo_pieces(metainfo["info"]["pieces"])
-        self.num_pieces = len(self.pieces_hash)
+        self.pieces_hash = metainfo["info"]["pieces"]
+        self.num_pieces = len(self.pieces_hash) // 20
+        self.file_length = metainfo["info"]["length"]
         self.piece_length = metainfo["info"]["piece length"]
-        self.last_piece_length = metainfo["info"]["length"] - metainfo["info"]["piece length"] * (self.num_pieces - 1)
+        self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
         self.peer_id = None
         self.reserved = None
         self.bitfield = None
@@ -115,5 +116,5 @@ class Peer():
         assert len(payload) == 0
 
         piece_length = self.piece_length if piece_index < self.num_pieces - 1 else self.last_piece_length
-        
-        return recv_piece(self._sock, piece_index, self.pieces_hash[piece_index], piece_length)
+
+        return recv_piece(self._sock, piece_index, self.pieces_hash[piece_index*20: piece_index*20+20], piece_length)
