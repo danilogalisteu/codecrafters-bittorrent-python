@@ -7,7 +7,7 @@ import sys
 import threading
 
 from .protocol.bencode import decode_bencode
-from .protocol.handshake import do_handshake
+from .protocol.handshake import do_extension_handshake, do_handshake
 from .protocol.magnet import parse_magnet
 from .protocol.metainfo import get_infohash, get_metainfo, parse_metainfo_pieces, print_info
 from .protocol.peer import Peer, get_peers, get_peers_from_metainfo, print_peers
@@ -122,6 +122,9 @@ def run_magnet_parse(magnet_link: str):
 
 def run_magnet_handshake(magnet_link: str, peer_id: bytes):
     unknown_length = 1024
+    extension_support = {
+        "ut_metadata": 1,
+    }
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
     peers = get_peers(trackers[0], info_hash, unknown_length, peer_id)
@@ -130,7 +133,14 @@ def run_magnet_handshake(magnet_link: str, peer_id: bytes):
         reserved_extensions = (1 << 20).to_bytes(8, "big", signed=False)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(peer)
-            r_peer_id, _ = do_handshake(sock, info_hash, peer_id, reserved_extensions)
+            r_peer_id, r_reserved = do_handshake(sock, info_hash, peer_id, reserved_extensions)
+            supports_extension = ((r_reserved[5] >> 4) & 1) == 1
+
+            comm_buffer = b""
+            if supports_extension:
+                r_extension_support = do_extension_handshake(sock, extension_support, comm_buffer)
+                print("r_extension_support", r_extension_support)
+
             print(f"Peer ID: {r_peer_id.hex()}")
 
 
