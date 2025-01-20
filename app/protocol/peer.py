@@ -58,14 +58,13 @@ class Peer():
         client_reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00"
     ) -> None:
         self.address = address
-        self.metainfo = metainfo
         self.client_id = client_id
         self.client_reserved = client_reserved
-        self.info_hash = get_infohash(self.metainfo)
-        self.pieces_hash = parse_metainfo_pieces(self.metainfo["info"]["pieces"])
+        self.info_hash = get_infohash(metainfo)
+        self.pieces_hash = parse_metainfo_pieces(metainfo["info"]["pieces"])
         self.num_pieces = len(self.pieces_hash)
-        self.piece_length = self.metainfo["info"]["piece length"]
-        self.last_piece_length = self.metainfo["info"]["length"] - self.metainfo["info"]["piece length"] * (self.num_pieces - 1)
+        self.piece_length = metainfo["info"]["piece length"]
+        self.last_piece_length = metainfo["info"]["length"] - metainfo["info"]["piece length"] * (self.num_pieces - 1)
         self.peer_id = None
         self.reserved = None
         self.bitfield = None
