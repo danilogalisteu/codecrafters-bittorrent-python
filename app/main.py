@@ -47,7 +47,6 @@ def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(peer)
             r_peer_id, _ = do_handshake(sock, info_hash, peer_id)
-            sock.close()
             print(f"Peer ID: {r_peer_id.hex()}")
 
 
@@ -136,7 +135,6 @@ def run_magnet_handshake(magnet_link: str, peer_id: bytes):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect(peer)
             r_peer_id, _ = do_handshake(sock, info_hash, peer_id, reserved_extensions)
-            sock.close()
             print(f"Peer ID: {r_peer_id.hex()}")
 
 
