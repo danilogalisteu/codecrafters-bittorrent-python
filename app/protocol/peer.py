@@ -5,18 +5,17 @@ import urllib.request
 from .bencode import decode_bencode
 from .handshake import do_handshake
 from .message import MsgID, recv_message, send_message
-from .metainfo import get_infohash, parse_metainfo_pieces
 from .piece import recv_piece
 
 
-def get_peers(tracker: str, info_hash: bytes, length: int, peer_id: bytes, port: int=6881):
+def get_peers(tracker: str, info_hash: bytes, file_length: int, peer_id: bytes, port: int=6881):
     query = {
         "info_hash": info_hash,
         "peer_id": peer_id,
         "port": port,
         "uploaded": 0,
         "downloaded": 0,
-        "left": length,
+        "left": file_length,
         "compact": 1,
     }
     url = tracker + "?" + urllib.parse.urlencode(query)
@@ -34,16 +33,6 @@ def get_peers(tracker: str, info_hash: bytes, length: int, peer_id: bytes, port:
     return peers
 
 
-def get_peers_from_metainfo(metainfo: dict, peer_id: bytes, port: int=6881) -> list[tuple[str, int]]:
-    return get_peers(
-        metainfo['announce'],
-        get_infohash(metainfo),
-        metainfo['info']['length'],
-        peer_id,
-        port,
-    )
-
-
 def print_peers(peers: list[tuple[str, int]]):
     for peer in peers:
         print(f"{peer[0]}:{peer[1]}")
@@ -53,19 +42,19 @@ class Peer():
     def __init__(
         self,
         address: tuple[str, int],
-        metainfo: dict,
+        info_hash: bytes,
         client_id: bytes,
         client_reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00"
     ) -> None:
         self.address = address
         self.client_id = client_id
         self.client_reserved = client_reserved
-        self.info_hash = get_infohash(metainfo)
-        self.pieces_hash = metainfo["info"]["pieces"]
-        self.num_pieces = len(self.pieces_hash) // 20
-        self.file_length = metainfo["info"]["length"]
-        self.piece_length = metainfo["info"]["piece length"]
-        self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
+        self.info_hash = info_hash
+        self.pieces_hash = b""
+        self.num_pieces = 0
+        self.file_length = 0
+        self.piece_length = 0
+        self.last_piece_length = 0
         self.peer_id = None
         self.reserved = None
         self.bitfield = None
@@ -73,6 +62,7 @@ class Peer():
         self._comm_buffer = b""
         self._sock = None
         self._initialized = False
+        self._initialized_pieces = False
 
     def __del__(self):
         if self._sock:
@@ -83,16 +73,25 @@ class Peer():
         byte_mask = 1 << (7 - piece_index % 8)
         return (bitfield[bitfield_index] & byte_mask) != 0
 
+    def initialize_pieces(self, pieces_hash: bytes, file_length: int, piece_length: int):
+        self.pieces_hash = pieces_hash
+        self.num_pieces = len(self.pieces_hash) // 20
+        self.file_length = file_length
+        self.piece_length = piece_length
+        self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
+        self._initialized_pieces = True
+
     def initialize(self) -> None:
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.connect(self.address)
 
         # Get peer info
         self.peer_id, self.reserved = do_handshake(self._sock, self.info_hash, self.client_id, self.client_reserved)
+
+        # Exchange bitfields
         self.bitfield = recv_message(MsgID.BITFIELD, self._sock, self._comm_buffer)
 
         send_message(MsgID.INTERESTED, self._sock)
-
         payload = recv_message(MsgID.UNCHOKE, self._sock, self._comm_buffer)
         assert len(payload) == 0
 
@@ -112,9 +111,13 @@ class Peer():
         return piece_index in self.peer_pieces
 
     def get_piece(self, piece_index: int) -> bytes | None:
+        if not self._initialized_pieces:
+            raise ValueError("piece info not initialized")
+
         if not self.has_piece(piece_index):
             return
 
         piece_length = self.piece_length if piece_index < self.num_pieces - 1 else self.last_piece_length
+        assert piece_length > 0
 
         return recv_piece(self._sock, piece_index, self.pieces_hash[piece_index*20: piece_index*20+20], piece_length)
