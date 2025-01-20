@@ -39,22 +39,6 @@ def print_peers(peers: list[tuple[str, int]]):
         print(f"{peer[0]}:{peer[1]}")
 
 
-def get_peer_info(peer: tuple[str, int], info_hash: bytes, peer_id: bytes) -> tuple[bytes, bytes]:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.connect(peer)
-        r_peer_id, _ = do_handshake(sock, info_hash, peer_id)
-        comm_buffer = b""
-        r_bitfield = recv_message(MsgID.BITFIELD, sock, comm_buffer)
-        sock.close()
-        return r_peer_id, r_bitfield
-
-
-def has_bitfield_piece(bitfield: bytes, piece_index: int) -> bool:
-    bitfield_index = piece_index // 8
-    byte_mask = 1 << (7 - piece_index % 8)
-    return (bitfield[bitfield_index] & byte_mask) != 0
-
-
 class Peer():
     def __init__(self, address: tuple[str, int], metainfo: dict, client_id: bytes) -> None:
         self.address = address
@@ -62,20 +46,35 @@ class Peer():
         self.client_id = client_id
         self.info_hash = get_infohash(self.metainfo)
         self.pieces_hash = parse_metainfo_pieces(self.metainfo["info"]["pieces"])
+        self.num_pieces = len(self.pieces_hash)
         self.peer_info = None
         self.peer_pieces = None
         self._initialized = False
 
+    def _get_peer_info(self) -> tuple[bytes, bytes]:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect(self.address)
+            r_peer_id, _ = do_handshake(sock, self.info_hash, self.client_id)
+            comm_buffer = b""
+            r_bitfield = recv_message(MsgID.BITFIELD, sock, comm_buffer)
+            sock.close()
+            return r_peer_id, r_bitfield
+
+    def _has_bitfield_piece(self, bitfield: bytes, piece_index: int) -> bool:
+        bitfield_index = piece_index // 8
+        byte_mask = 1 << (7 - piece_index % 8)
+        return (bitfield[bitfield_index] & byte_mask) != 0
+
     def initialize(self) -> None:
-        self.peer_info = get_peer_info(self.address, self.info_hash, self.client_id)
+        self.peer_info = self._get_peer_info()
         self.peer_pieces = [
             piece_index
-            for piece_index in range(len(self.pieces_hash))
-            if has_bitfield_piece(self.peer_info[1], piece_index)
+            for piece_index in range(self.num_pieces)
+            if self._has_bitfield_piece(self.peer_info[1], piece_index)
         ]
 
     def valid_piece(self, piece_index: int) -> bool:
-        return piece_index >= 0 and piece_index < len(self.pieces_hash)
+        return piece_index >= 0 and piece_index < self.num_pieces
 
     def has_piece(self, piece_index: int) -> bool:
         if not self.valid_piece(piece_index):
@@ -99,7 +98,7 @@ class Peer():
                 comm_buffer = b""
 
                 bitfield = recv_message(MsgID.BITFIELD, sock, comm_buffer)
-                assert has_bitfield_piece(bitfield, piece_index)
+                assert self._has_bitfield_piece(bitfield, piece_index)
 
                 send_message(MsgID.INTERESTED, sock)
 

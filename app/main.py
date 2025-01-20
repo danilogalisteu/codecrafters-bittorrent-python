@@ -6,10 +6,8 @@ import sys
 
 from .protocol.bencode import decode_bencode
 from .protocol.handshake import do_handshake
-from .protocol.message import MsgID, recv_message, send_message
 from .protocol.metainfo import get_infohash, get_metainfo, parse_metainfo_pieces, print_info
-from .protocol.peers import Peer, get_peer_info, get_peers, has_bitfield_piece, print_peers
-from .protocol.piece import recv_piece
+from .protocol.peers import Peer, get_peers, print_peers
 
 
 def run_decode(value: str):
@@ -53,7 +51,6 @@ def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes):
 def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, peer_id: bytes):
     metainfo = get_metainfo(torrent_file)
     if metainfo:
-        info_hash = get_infohash(metainfo)
         pieces_hash = parse_metainfo_pieces(metainfo["info"]["pieces"])
         if piece_index >= len(pieces_hash):
             raise IndexError(f"Piece {piece_index} not found in torrent")
@@ -78,21 +75,7 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
     if metainfo:
         info_hash = get_infohash(metainfo)
         pieces_hash = parse_metainfo_pieces(metainfo["info"]["pieces"])
-
         peers = get_peers(metainfo, peer_id)
-        peers_info = {
-            peer: get_peer_info(peer, info_hash, peer_id)
-            for peer in peers
-        }
-        peers_pieces = {
-            peer: [
-                piece_index
-                for piece_index in range(len(pieces_hash))
-                if has_bitfield_piece(info[1], piece_index)
-            ]
-            for peer, info in peers_info.items()
-        }
-        print(peers_pieces)
 
 
 def make_parser(peer_id: bytes):
