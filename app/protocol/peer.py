@@ -9,17 +9,17 @@ from .metainfo import get_infohash, parse_metainfo_pieces
 from .piece import recv_piece
 
 
-def get_peers(metainfo: dict, peer_id: bytes, port: int=6881) -> list[tuple[str, int]]:
+def get_peers(tracker: str, info_hash: bytes, length: int, peer_id: bytes, port: int=6881):
     query = {
-        "info_hash": get_infohash(metainfo),
+        "info_hash": info_hash,
         "peer_id": peer_id,
         "port": port,
         "uploaded": 0,
         "downloaded": 0,
-        "left": metainfo['info']['length'],
+        "left": length,
         "compact": 1,
     }
-    url = metainfo['announce'] + "?" + urllib.parse.urlencode(query)
+    url = tracker + "?" + urllib.parse.urlencode(query)
     res, _ = decode_bencode(urllib.request.urlopen(url).read())
 
     peers = []
@@ -32,6 +32,16 @@ def get_peers(metainfo: dict, peer_id: bytes, port: int=6881) -> list[tuple[str,
             pos += 6
 
     return peers
+
+
+def get_peers_from_metainfo(metainfo: dict, peer_id: bytes, port: int=6881) -> list[tuple[str, int]]:
+    return get_peers(
+        metainfo['announce'],
+        get_infohash(metainfo),
+        metainfo['info']['length'],
+        peer_id,
+        port,
+    )
 
 
 def print_peers(peers: list[tuple[str, int]]):
