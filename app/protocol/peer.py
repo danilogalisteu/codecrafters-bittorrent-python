@@ -91,6 +91,11 @@ class Peer():
         self.peer_id, self.reserved = do_handshake(self._sock, self.info_hash, self.client_id, self.client_reserved)
         self.bitfield = recv_message(MsgID.BITFIELD, self._sock, self._comm_buffer)
 
+        send_message(MsgID.INTERESTED, self._sock)
+
+        payload = recv_message(MsgID.UNCHOKE, self._sock, self._comm_buffer)
+        assert len(payload) == 0
+
         self.peer_pieces = [
             piece_index
             for piece_index in range(self.num_pieces)
@@ -109,11 +114,6 @@ class Peer():
     def get_piece(self, piece_index: int) -> bytes | None:
         if not self.has_piece(piece_index):
             return
-
-        send_message(MsgID.INTERESTED, self._sock)
-
-        payload = recv_message(MsgID.UNCHOKE, self._sock, self._comm_buffer)
-        assert len(payload) == 0
 
         piece_length = self.piece_length if piece_index < self.num_pieces - 1 else self.last_piece_length
 
