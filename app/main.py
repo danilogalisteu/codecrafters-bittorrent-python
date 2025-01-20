@@ -75,22 +75,14 @@ def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, pee
 def run_download(out_file: str, torrent_file: str, peer_id: bytes):
     metainfo = get_metainfo(torrent_file)
     if metainfo:
-        def piece_worker(peer: Peer, jobs: queue.Queue, results: queue.Queue):
+        def peer_worker(address: tuple[str, int], metainfo: dict, peer_id: bytes, jobs: queue.Queue, results: queue.Queue):
+            peer = Peer(address, metainfo, peer_id)
             while True:
                 piece_index = jobs.get()
                 piece = peer.get_piece(piece_index)
                 if piece is not None:
                     results.put((piece_index, piece))
                     jobs.task_done()
-
-        def peer_worker(address: tuple[str, int], metainfo: dict, peer_id: bytes, jobs: queue.Queue, results: queue.Queue):
-            peer = Peer(address, metainfo, peer_id)
-            peer.initialize()
-            threading.Thread(
-                target=piece_worker,
-                args=(peer, jobs, results,),
-                daemon=True
-            ).start()
 
         jobs = queue.Queue()
         results = queue.Queue()
@@ -105,6 +97,7 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
         num_pieces = len(metainfo["info"]["pieces"]) // 20
         for piece_index in range(num_pieces):
             jobs.put(piece_index)
+
         jobs.join()
 
         pieces = [piece for _, piece in sorted(list(results.queue), key=lambda item: item[0])]
