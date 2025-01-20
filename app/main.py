@@ -79,9 +79,6 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
         num_pieces = len(parse_metainfo_pieces(metainfo["info"]["pieces"]))
 
         jobs = queue.Queue()
-        for piece_index in range(num_pieces):
-            jobs.put(piece_index)
-
         results = queue.Queue()
         # pieces = [None] * num_pieces
 
@@ -109,6 +106,9 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
                 args=(address, metainfo, peer_id,),
                 daemon=True
             ).start()
+
+        for piece_index in range(num_pieces):
+            jobs.put(piece_index)
 
         jobs.join()
         pieces = [piece for _, piece in sorted(list(results.queue), key=lambda item: item[0])]
