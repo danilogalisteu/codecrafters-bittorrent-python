@@ -90,12 +90,11 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
                 if piece is not None:
                     pieces[piece_index] = piece
                     jobs.task_done()
-                    print(f"Piece {piece_index + 1} of {num_pieces} downloaded...")
+                    print(f"Piece {piece_index + 1} of {num_pieces} downloaded from {peer.address}")
 
         peer_count = 0
         for address in get_peers(metainfo, peer_id):
             peer = Peer(address, metainfo, peer_id)
-            peer.initialize()
             threading.Thread(target=piece_worker, args=(peer,), daemon=True).start()
             peer_count += 1
             print("Added worker peer", peer_count, "at", address)
