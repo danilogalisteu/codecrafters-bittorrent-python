@@ -97,7 +97,6 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
             peer = Peer(address, metainfo, peer_id)
             peer.initialize()
             threading.Thread(target=piece_worker, args=(peer,), daemon=True).start()
-            threading.Thread(target=piece_worker, args=(peer,), daemon=True).start()
             peer_count += 1
             print("Added worker peer", peer_count, "at", address)
 
