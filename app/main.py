@@ -1,8 +1,10 @@
 import argparse
 import json
+import queue
 import secrets
 import socket
 import sys
+import threading
 
 from .protocol.bencode import decode_bencode
 from .protocol.handshake import do_handshake
@@ -74,15 +76,26 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
     metainfo = get_metainfo(torrent_file)
     if metainfo:
         num_pieces = len(parse_metainfo_pieces(metainfo["info"]["pieces"]))
-        peers = [Peer(address, metainfo, peer_id) for address in get_peers(metainfo, peer_id)]
+
+        jobs = queue.Queue()
+        for piece_index in range(num_pieces):
+            jobs.put(piece_index)
+
         pieces = [None] * num_pieces
 
-        for piece_index in range(num_pieces):
-            for peer in peers:
+        def piece_worker(peer: tuple[str, int]):
+            while True:
+                piece_index = jobs.get()
                 piece = peer.get_piece(piece_index)
                 if piece is not None:
                     pieces[piece_index] = piece
-                    break
+                    jobs.task_done()
+
+        for address in get_peers(metainfo, peer_id):
+            peer = Peer(address, metainfo, peer_id)
+            threading.Thread(target=piece_worker, args=(peer,), daemon=True).start()
+
+        jobs.join()
 
         missing_pieces = [piece_index for piece_index, piece in enumerate(pieces) if piece is None]
         if missing_pieces:
