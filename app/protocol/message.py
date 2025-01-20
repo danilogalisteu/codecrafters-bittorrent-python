@@ -10,6 +10,7 @@ class MsgID(IntEnum):
     BITFIELD = 5
     REQUEST = 6
     PIECE = 7
+    EXTENSION = 20
 
 
 def encode_message(id: int=None, payload: bytes=b"") -> bytes:
@@ -51,10 +52,12 @@ def recv_message(recv_id: int, sock: socket.SocketType, buffer: bytes, recv_leng
             # Incomplete message
             buffer += sock.recv(recv_length)
             continue
+        # print("received", id, MsgID(id).name, payload)
         if id == recv_id:
             break
     return payload
 
 
 def send_message(send_id: int, sock: socket.SocketType, payload: bytes=b""):
+    # print("sending", send_id, MsgID(send_id).name, payload)
     sock.send(encode_message(send_id, payload))
