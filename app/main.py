@@ -8,7 +8,7 @@ from .protocol.bencode import decode_bencode
 from .protocol.handshake import do_handshake
 from .protocol.message import MsgID, recv_message, send_message
 from .protocol.metainfo import get_infohash, get_metainfo, parse_metainfo_pieces, print_info
-from .protocol.peers import get_peer_info, get_peers, has_bitfield_piece, print_peers
+from .protocol.peers import Peer, get_peer_info, get_peers, has_bitfield_piece, print_peers
 from .protocol.piece import recv_piece
 
 
@@ -59,32 +59,18 @@ def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, pee
             raise IndexError(f"Piece {piece_index} not found in torrent")
 
         peers = get_peers(metainfo, peer_id)
-        peers_info = {peer: get_peer_info(peer, info_hash, peer_id) for peer in peers}
-        peers_valid = [peer for peer in peers if has_bitfield_piece(peers_info[peer][1], piece_index)]
-        if peers_valid:
-            peer = peers_valid[0]
 
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect(peer)
+        for address in peers:
+            peer = Peer(address, metainfo, peer_id)
+            piece = peer.get_piece(piece_index)
+            if piece is not None:
+                break
 
-                _, _ = do_handshake(sock, info_hash, peer_id)
-
-                comm_buffer = b""
-
-                bitfield = recv_message(MsgID.BITFIELD, sock, comm_buffer)
-                assert has_bitfield_piece(bitfield, piece_index)
-
-                send_message(MsgID.INTERESTED, sock)
-
-                payload = recv_message(MsgID.UNCHOKE, sock, comm_buffer)
-                assert len(payload) == 0
-
-                piece = recv_piece(sock, metainfo, piece_index)
-
-                sock.close()
-
-                with open(piece_file, "wb") as file:
-                    file.write(piece)
+        if piece is not None:
+            with open(piece_file, "wb") as file:
+                file.write(piece)
+        else:
+            print(f"Piece {piece_index} not found in any peer")
 
 
 def run_download(out_file: str, torrent_file: str, peer_id: bytes):
