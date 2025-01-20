@@ -90,6 +90,7 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
                 if piece is not None:
                     pieces[piece_index] = piece
                     jobs.task_done()
+                    print(f"Piece {piece_index + 1} of {num_pieces} downloaded...")
 
         for address in get_peers(metainfo, peer_id):
             peer = Peer(address, metainfo, peer_id)
