@@ -81,15 +81,17 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
         jobs = queue.Queue()
         for piece_index in range(num_pieces):
             jobs.put(piece_index)
-            
-        pieces = [None] * num_pieces
+
+        results = queue.Queue()
+        # pieces = [None] * num_pieces
 
         def piece_worker(peer: Peer):
             while True:
                 piece_index = jobs.get()
                 piece = peer.get_piece(piece_index)
                 if piece is not None:
-                    pieces[piece_index] = piece
+                    # pieces[piece_index] = piece
+                    results.put((piece_index, piece))
                     jobs.task_done()
 
         def peer_worker(address: tuple[str, int], metainfo, peer_id):
@@ -109,6 +111,8 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
             ).start()
 
         jobs.join()
+        pieces = [piece for _, piece in sorted(list(results.queue), key=lambda item: item[0])]
+        # print(pieces)
 
         missing_pieces = [piece_index for piece_index, piece in enumerate(pieces) if piece is None]
         if missing_pieces:
