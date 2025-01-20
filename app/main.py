@@ -84,8 +84,7 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
             
         pieces = [None] * num_pieces
 
-        def piece_worker(address: tuple[str, int], metainfo, peer_id):
-            peer = Peer(address, metainfo, peer_id)
+        def piece_worker(peer: Peer):
             while True:
                 piece_index = jobs.get()
                 piece = peer.get_piece(piece_index)
@@ -93,9 +92,18 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
                     pieces[piece_index] = piece
                     jobs.task_done()
 
-        for address in get_peers_from_metainfo(metainfo, peer_id):
+        def peer_worker(address: tuple[str, int], metainfo, peer_id):
+            peer = Peer(address, metainfo, peer_id)
+            peer.initialize()
             threading.Thread(
                 target=piece_worker,
+                args=(peer,),
+                daemon=True
+            ).start()
+
+        for address in get_peers_from_metainfo(metainfo, peer_id):
+            threading.Thread(
+                target=peer_worker,
                 args=(address, metainfo, peer_id,),
                 daemon=True
             ).start()
