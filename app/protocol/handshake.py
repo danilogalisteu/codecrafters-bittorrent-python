@@ -1,5 +1,8 @@
 import socket
 
+from .bencode import decode_bencode, encode_bencode
+from .message import MsgID, recv_message, send_message
+
 
 def encode_handshake(pstr: bytes, info_hash: bytes, peer_id: bytes, reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00") -> bytes:
     pstrlen = len(pstr)
@@ -28,3 +31,11 @@ def do_handshake(sock: socket.SocketType, info_hash: bytes, peer_id: bytes, rese
     assert protocol == r_pstr
     assert info_hash == r_info_hash
     return r_peer_id, r_reserved
+
+
+def do_extension_handshake(sock: socket.SocketType, extension_support: dict, comm_buffer: bytes) -> dict:
+    payload = b"\x00" + encode_bencode({"m": extension_support})
+    send_message(MsgID.EXTENSION, sock, payload)
+    r_payload = recv_message(MsgID.EXTENSION, sock, comm_buffer)
+    assert r_payload[0] == 0
+    return decode_bencode(r_payload[1:])[0]["m"]
