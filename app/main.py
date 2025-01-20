@@ -10,7 +10,7 @@ from .protocol.bencode import decode_bencode
 from .protocol.handshake import do_handshake
 from .protocol.magnet import parse_magnet
 from .protocol.metainfo import get_infohash, get_metainfo, parse_metainfo_pieces, print_info
-from .protocol.peer import Peer, get_peers_from_metainfo, print_peers
+from .protocol.peer import Peer, get_peers, get_peers_from_metainfo, print_peers
 
 
 def run_decode(value: str):
@@ -118,10 +118,18 @@ def run_magnet_parse(magnet_link: str):
 
 
 def run_magnet_handshake(magnet_link: str, peer_id: bytes):
-    _, trackers, info_hash = parse_magnet(magnet_link)
-    print("Tracker URL:", trackers[0])
-    print("Info Hash:", info_hash)
-
+    unknown_length = 1024
+    _, trackers, info_hash_str = parse_magnet(magnet_link)
+    info_hash = bytes.fromhex(info_hash_str)
+    peers = get_peers(trackers[0], info_hash, unknown_length, peer_id)
+    if peers:
+        peer = peers[0]
+        reserved_extensions = (1 << 20).to_bytes(8, "big", signed=False)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect(peer)
+            r_peer_id, _ = do_handshake(sock, info_hash, peer_id, reserved_extensions)
+            sock.close()
+            print(f"Peer ID: {r_peer_id.hex()}")
 
 
 def make_parser(peer_id: bytes):
