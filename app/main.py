@@ -92,9 +92,12 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
                     jobs.task_done()
                     print(f"Piece {piece_index + 1} of {num_pieces} downloaded...")
 
+        peer_count = 0
         for address in get_peers(metainfo, peer_id):
             peer = Peer(address, metainfo, peer_id)
             threading.Thread(target=piece_worker, args=(peer,), daemon=True).start()
+            peer_count += 1
+            print("Added worker peer", peer_count, "at", address)
 
         jobs.join()
 
