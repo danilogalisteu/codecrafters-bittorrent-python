@@ -78,32 +78,30 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
     if metainfo:
         num_pieces = len(parse_metainfo_pieces(metainfo["info"]["pieces"]))
 
-        jobs = queue.Queue()
-        results = queue.Queue()
-        # pieces = [None] * num_pieces
-
-        def piece_worker(peer: Peer):
+        def piece_worker(peer: Peer, jobs: queue.Queue, results: queue.Queue):
             while True:
                 piece_index = jobs.get()
                 piece = peer.get_piece(piece_index)
                 if piece is not None:
-                    # pieces[piece_index] = piece
                     results.put((piece_index, piece))
                     jobs.task_done()
 
-        def peer_worker(address: tuple[str, int], metainfo, peer_id):
+        def peer_worker(address: tuple[str, int], metainfo: dict, peer_id: bytes, jobs: queue.Queue, results: queue.Queue):
             peer = Peer(address, metainfo, peer_id)
             peer.initialize()
             threading.Thread(
                 target=piece_worker,
-                args=(peer,),
+                args=(peer, jobs, results,),
                 daemon=True
             ).start()
+
+        jobs = queue.Queue()
+        results = queue.Queue()
 
         for address in get_peers_from_metainfo(metainfo, peer_id):
             threading.Thread(
                 target=peer_worker,
-                args=(address, metainfo, peer_id,),
+                args=(address, metainfo, peer_id, jobs, results),
                 daemon=True
             ).start()
 
@@ -112,7 +110,6 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
 
         jobs.join()
         pieces = [piece for _, piece in sorted(list(results.queue), key=lambda item: item[0])]
-        # print(pieces)
 
         missing_pieces = [piece_index for piece_index, piece in enumerate(pieces) if piece is None]
         if missing_pieces:
