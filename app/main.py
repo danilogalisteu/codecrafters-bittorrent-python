@@ -76,8 +76,6 @@ def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, pee
 def run_download(out_file: str, torrent_file: str, peer_id: bytes):
     metainfo = get_metainfo(torrent_file)
     if metainfo:
-        num_pieces = len(parse_metainfo_pieces(metainfo["info"]["pieces"]))
-
         def piece_worker(peer: Peer, jobs: queue.Queue, results: queue.Queue):
             while True:
                 piece_index = jobs.get()
@@ -105,10 +103,11 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
                 daemon=True
             ).start()
 
+        num_pieces = len(metainfo["info"]["pieces"]) // 20
         for piece_index in range(num_pieces):
             jobs.put(piece_index)
-
         jobs.join()
+
         pieces = [piece for _, piece in sorted(list(results.queue), key=lambda item: item[0])]
 
         missing_pieces = [piece_index for piece_index, piece in enumerate(pieces) if piece is None]
