@@ -73,9 +73,24 @@ def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, pee
 def run_download(out_file: str, torrent_file: str, peer_id: bytes):
     metainfo = get_metainfo(torrent_file)
     if metainfo:
-        info_hash = get_infohash(metainfo)
-        pieces_hash = parse_metainfo_pieces(metainfo["info"]["pieces"])
-        peers = get_peers(metainfo, peer_id)
+        num_pieces = len(parse_metainfo_pieces(metainfo["info"]["pieces"]))
+        peers = [Peer(address, metainfo, peer_id) for address in get_peers(metainfo, peer_id)]
+        pieces = [None] * num_pieces
+
+        for piece_index in range(num_pieces):
+            for peer in peers:
+                piece = peer.get_piece(piece_index)
+                if piece is not None:
+                    pieces[piece_index] = piece
+                    break
+
+        missing_pieces = [piece_index for piece_index, piece in enumerate(pieces) if piece is None]
+        if missing_pieces:
+            print("Some pieces are missing:", ", ".join(missing_pieces))
+        else:
+            with open(out_file, "wb") as file:
+                for piece in pieces:
+                    file.write(piece)
 
 
 def make_parser(peer_id: bytes):
