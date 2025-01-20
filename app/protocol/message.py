@@ -52,12 +52,12 @@ def recv_message(recv_id: int, sock: socket.SocketType, buffer: bytes, recv_leng
             # Incomplete message
             buffer += sock.recv(recv_length)
             continue
-        print("received", id, MsgID(id).name, payload)
+        print("received", id, MsgID(id).name, len(payload), payload)
         if id == recv_id:
             break
     return payload
 
 
 def send_message(send_id: int, sock: socket.SocketType, payload: bytes=b""):
-    print("sending", send_id, MsgID(send_id).name, payload)
+    print("sending", send_id, MsgID(send_id).name, len(payload), payload)
     sock.send(encode_message(send_id, payload))
