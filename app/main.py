@@ -80,9 +80,11 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
             peer = Peer(address, metainfo, peer_id)
             while True:
                 piece_index = jobs.get()
+                print("peer", address, "received job", piece_index)
                 piece = peer.get_piece(piece_index)
                 if piece is not None:
                     results.put((piece_index, piece))
+                    print("peer", address, "finished job", piece_index)
                     jobs.task_done()
 
         jobs = queue.Queue()
