@@ -61,11 +61,11 @@ def recv_message(sock: socket.SocketType, buffer: bytes, recv_length: int=1024) 
             # Incomplete message
             buffer += sock.recv(recv_length)
             continue
-        print("received", recv_id, MsgID(recv_id).name, len(payload), payload)
+        # print("received", recv_id, MsgID(recv_id).name, len(payload), payload)
         break
     return recv_id, payload, buffer
 
 
 def send_message(send_id: int, sock: socket.SocketType, payload: bytes=b"") -> None:
-    print("sending", send_id, MsgID(send_id).name, len(payload), payload)
+    # print("sending", send_id, MsgID(send_id).name, len(payload), payload)
     sock.send(encode_message(send_id, payload))

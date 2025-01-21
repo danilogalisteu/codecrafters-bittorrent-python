@@ -155,7 +155,6 @@ class Peer:
         self._init_handshake = True
 
         self.supports_extension = ((self.reserved[5] >> 4) & 1) == 1
-        print("extension support", self.supports_extension)
 
         if self.supports_extension and self.client_extension_support:
             self._send_queue.put((MsgID.EXTENSION, b"\x00" + encode_bencode({"m": self.client_extension_support})))
@@ -205,13 +204,11 @@ class Peer:
         current_begin = 0
         while current_begin < piece_length:
             eff_chunk_length = min(chunk_length, piece_length - current_begin)
-            print("sending request", piece_index, current_begin, eff_chunk_length)
             self._send_queue.put((MsgID.REQUEST, struct.pack("!III", piece_index, current_begin, eff_chunk_length)))
 
             while True:
                 if not self._recv_queue.empty():
                     r_index, r_begin, r_block = self._recv_queue.get()
-                    print("received response", r_index, r_begin, r_block)
                     if r_index == piece_index and r_begin == current_begin:
                         piece += r_block
                         current_begin += len(r_block)
