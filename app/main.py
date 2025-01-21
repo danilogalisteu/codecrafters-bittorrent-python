@@ -11,7 +11,8 @@ from .protocol.bencode import decode_bencode
 from .protocol.handshake import decode_handshake, encode_handshake
 from .protocol.magnet import parse_magnet
 from .protocol.metainfo import load_metainfo
-from .protocol.peer import Peer, get_peers, print_peers
+from .protocol.peer import Peer
+from .protocol.tracker import get_peers, print_peers
 
 
 def run_decode(value: str) -> None:
