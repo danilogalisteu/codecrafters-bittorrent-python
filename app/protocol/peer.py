@@ -22,14 +22,15 @@ class Peer:
         self.info_hash = info_hash
         self.client_id = client_id
         self.client_reserved = client_reserved
+        self.client_bitfield = None
+        self.client_ext_support = client_ext_support
 
         # handshake
         self.peer_id = None
         self.peer_reserved = None
+        self.peer_bitfield = None
 
-        self.bitfield = None
         self.peer_supports_extension = None
-        self.client_ext_support = client_ext_support
         self.peer_ext_support = None
         self.peer_ext_meta_id = None
         self.peer_ext_meta_info = None
@@ -60,10 +61,17 @@ class Peer:
         self._init_metadata = False
         self._init_pieces = False
 
-    def _bitfield_has_piece(self, piece_index: int) -> bool:
+    def _client_has_piece(self, piece_index: int) -> bool:
+        if self.client_bitfield is None:
+            return False
         bitfield_index = piece_index // 8
         byte_mask = 1 << (7 - piece_index % 8)
-        return (self.bitfield[bitfield_index] & byte_mask) != 0
+        return (self.client_bitfield[bitfield_index] & byte_mask) != 0
+
+    def _peer_has_piece(self, piece_index: int) -> bool:
+        bitfield_index = piece_index // 8
+        byte_mask = 1 << (7 - piece_index % 8)
+        return (self.peer_bitfield[bitfield_index] & byte_mask) != 0
 
     async def _handshake(self) -> None:
         pstr = b"BitTorrent protocol"
@@ -110,7 +118,10 @@ class Peer:
                 assert len(recv_payload) == 0
                 self._is_interested = False
             case MsgID.BITFIELD:
-                self.bitfield = recv_payload
+                self.peer_bitfield = recv_payload
+                if self.client_bitfield is None:
+                    self.client_bitfield = int(0).to_bytes(len(self.peer_bitfield))
+                self._send_queue.put((MsgID.BITFIELD, self.client_bitfield))
             case MsgID.PIECE:
                 index = struct.unpack("!I", recv_payload[0:4])[0]
                 begin = struct.unpack("!I", recv_payload[4:8])[0]
@@ -180,7 +191,7 @@ class Peer:
             pass
 
     def initialize_pieces(self, pieces_hash: bytes, file_length: int, piece_length: int) -> None:
-        while not self.bitfield:
+        while not self.peer_bitfield:
             pass
 
         self.pieces_hash = pieces_hash
@@ -191,7 +202,7 @@ class Peer:
         self.peer_pieces = [
             piece_index
             for piece_index in range(self.num_pieces)
-            if self._bitfield_has_piece(piece_index)
+            if self._peer_has_piece(piece_index)
         ]
 
         self._init_pieces = True
