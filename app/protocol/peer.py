@@ -65,7 +65,7 @@ class Peer:
         byte_mask = 1 << (7 - piece_index % 8)
         return (self.bitfield[bitfield_index] & byte_mask) != 0
 
-    async def _handshake(self):
+    async def _handshake(self) -> None:
         pstr = b"BitTorrent protocol"
         handshake_len = len(pstr) + 1 + 8 + 20 + 20
 
@@ -84,7 +84,7 @@ class Peer:
             except IndexError:
                 pass
 
-    async def _ext_handshake(self):
+    async def _ext_handshake(self) -> None:
         self.supports_extension = ((self.peer_reserved[5] >> 4) & 1) == 1
         if self.supports_extension and self.client_ext_support:
             ext_handshake_payload = b"\x00" + encode_bencode({"m": self.client_ext_support})
@@ -93,7 +93,7 @@ class Peer:
             self._init_extension = True
             print("ext handshake NOK")
 
-    async def _comm_loop(self):
+    async def _comm_loop(self) -> None:
             # send one message from queue
             if not self._send_queue.empty():
                 send_id, send_payload = self._send_queue.get()
@@ -155,7 +155,7 @@ class Peer:
                     case _:
                         print("received unexpected", recv_id, MsgID(recv_id).name, len(recv_payload), recv_payload)
 
-    async def _initialize(self):
+    async def _initialize(self) -> None:
         self._reader, self._writer = await asyncio.open_connection(*self.address)
         await self._handshake()
         await self._ext_handshake()
@@ -169,11 +169,11 @@ class Peer:
 
         self._running = False
 
-    def initialize(self):
+    def initialize(self) -> None:
         self._comm_task = threading.Thread(target=asyncio.run, args=(self._initialize(),), daemon=True)
         self._comm_task.start()
 
-    def abort(self):
+    def abort(self) -> None:
         self._abort = True
         while self._running:
             pass
