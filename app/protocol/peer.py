@@ -159,7 +159,7 @@ class Peer:
         self._running = True
 
         while not self._abort:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.05)
 
             # send one message from queue
             if not self._send_queue.empty():
