@@ -119,9 +119,9 @@ class Peer:
                 self._is_interested = False
             case MsgID.BITFIELD:
                 self.peer_bitfield = recv_payload
-                if self.client_bitfield is None:
-                    self.client_bitfield = int(0).to_bytes(len(self.peer_bitfield))
-                self._send_queue.put((MsgID.BITFIELD, self.client_bitfield))
+                # if self.client_bitfield is None:
+                #     self.client_bitfield = int(0).to_bytes(len(self.peer_bitfield))
+                # self._send_queue.put((MsgID.BITFIELD, self.client_bitfield))
             case MsgID.PIECE:
                 index = struct.unpack("!I", recv_payload[0:4])[0]
                 begin = struct.unpack("!I", recv_payload[4:8])[0]
