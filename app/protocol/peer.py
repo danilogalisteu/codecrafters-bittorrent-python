@@ -28,8 +28,8 @@ def get_peers(tracker: str, info_hash: bytes, file_length: int, peer_id: bytes, 
     if "peers" in res:
         pos = 0
         while pos < len(res["peers"]):
-            peer_ip = ".".join(map(str, res['peers'][pos:pos+4]))
-            peer_port = int.from_bytes(res['peers'][pos+4:pos+6], 'big')
+            peer_ip = ".".join(map(str, res["peers"][pos:pos+4]))
+            peer_port = int.from_bytes(res["peers"][pos+4:pos+6], "big")
             peers.append((peer_ip, peer_port))
             pos += 6
 
@@ -48,7 +48,7 @@ class Peer:
         info_hash: bytes,
         client_id: bytes,
         client_reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00",
-        client_extension_support: dict={},
+        client_extension_support: dict | None=None,
     ) -> None:
         self.address = address
         self.client_id = client_id
@@ -63,7 +63,7 @@ class Peer:
         self.reserved = None
         self.supports_extension = None
         self.client_extension_support = client_extension_support
-        self.extension_support = {}
+        self.extension_support = None
         self.bitfield = None
         self.peer_pieces = None
         self._comm_buffer = b""
@@ -156,7 +156,7 @@ class Peer:
         self.supports_extension = ((self.reserved[5] >> 4) & 1) == 1
         print("extension support", self.supports_extension)
 
-        if self.supports_extension:
+        if self.supports_extension and self.client_extension_support:
             self._send_queue.put((MsgID.EXTENSION, b"\x00" + encode_bencode({"m": self.client_extension_support})))
         else:
             self._init_extension = True

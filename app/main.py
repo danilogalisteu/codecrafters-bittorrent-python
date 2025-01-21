@@ -106,7 +106,7 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None:
 
     jobs.join()
 
-    pieces = [piece for _, piece in sorted(list(results.queue), key=lambda item: item[0])]
+    pieces = [piece for _, piece in sorted(results.queue, key=lambda item: item[0])]
 
     missing_pieces = [piece_index for piece_index, piece in enumerate(pieces) if piece is None]
     if missing_pieces:

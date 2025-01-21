@@ -8,7 +8,7 @@ def parse_magnet(url: str) -> tuple[str, str]:
     query = parse_qs(result.query)
 
     name = query["dn"][0] if "dn" in query else ""
-    trackers = query["tr"] if "tr" in query else []
+    trackers = query.get("tr", [])
     info_hash = query["xt"][0]
 
     assert len(info_hash) == 49
