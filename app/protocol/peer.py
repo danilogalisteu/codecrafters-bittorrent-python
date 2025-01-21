@@ -93,7 +93,64 @@ class Peer:
             self._init_extension = True
             print("ext handshake NOK")
 
-    async def _comm_loop(self) -> None:
+    async def _parse_message(self, recv_id: int, recv_payload: bytes) -> None:
+        match recv_id:
+            case MsgID.KEEPALIVE:
+                pass
+            case MsgID.CHOKE:
+                assert len(recv_payload) == 0
+                self._am_choke = True
+            case MsgID.UNCHOKE:
+                assert len(recv_payload) == 0
+                self._am_choke = False
+            case MsgID.INTERESTED:
+                assert len(recv_payload) == 0
+                self._is_interested = True
+            case MsgID.NOTINTERESTED:
+                assert len(recv_payload) == 0
+                self._is_interested = False
+            case MsgID.BITFIELD:
+                self.bitfield = recv_payload
+            case MsgID.PIECE:
+                index = struct.unpack("!I", recv_payload[0:4])[0]
+                begin = struct.unpack("!I", recv_payload[4:8])[0]
+                block = recv_payload[8:]
+                self._recv_queue.put((index, begin, block))
+            case MsgID.EXTENSION:
+                ext_id = recv_payload[0]
+                ext_payload = decode_bencode(recv_payload[1:])[0]
+                # handshake
+                if ext_id == 0:
+                    self.peer_ext_support = ext_payload
+                    if "ut_metadata" in self.peer_ext_support["m"]:
+                        self.peer_ext_meta_info = b""
+                        self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
+                        meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
+                        self._send_queue.put((MsgID.EXTENSION, self.peer_ext_meta_id.to_bytes(1) + meta_dict))
+                    self._init_extension = True
+                    print("ext handshake OK")
+                # metadata
+                elif self.peer_ext_meta_id and ext_id == self.peer_ext_meta_id:
+                    self.peer_ext_meta_info += ext_payload
+                    self._init_metadata = True
+                # unexpected
+                else:
+                    print("new ext msg", ext_id, ext_payload)
+
+            case _:
+                print("received unexpected", recv_id, MsgID(recv_id).name, len(recv_payload), recv_payload)
+
+    async def _initialize(self) -> None:
+        self._reader, self._writer = await asyncio.open_connection(*self.address)
+        await self._handshake()
+        await self._ext_handshake()
+
+        self._abort = False
+        self._running = True
+
+        while not self._abort:
+            await asyncio.sleep(0.1)
+
             # send one message from queue
             if not self._send_queue.empty():
                 send_id, send_payload = self._send_queue.get()
@@ -109,63 +166,7 @@ class Peer:
                 # Incomplete message
                 self._comm_buffer += await self._reader.read(self._recv_length)
             else:
-                match recv_id:
-                    case MsgID.KEEPALIVE:
-                        pass
-                    case MsgID.CHOKE:
-                        assert len(recv_payload) == 0
-                        self._am_choke = True
-                    case MsgID.UNCHOKE:
-                        assert len(recv_payload) == 0
-                        self._am_choke = False
-                    case MsgID.INTERESTED:
-                        assert len(recv_payload) == 0
-                        self._is_interested = True
-                    case MsgID.NOTINTERESTED:
-                        assert len(recv_payload) == 0
-                        self._is_interested = False
-                    case MsgID.BITFIELD:
-                        self.bitfield = recv_payload
-                    case MsgID.PIECE:
-                        index = struct.unpack("!I", recv_payload[0:4])[0]
-                        begin = struct.unpack("!I", recv_payload[4:8])[0]
-                        block = recv_payload[8:]
-                        self._recv_queue.put((index, begin, block))
-                    case MsgID.EXTENSION:
-                        ext_id = recv_payload[0]
-                        ext_payload = decode_bencode(recv_payload[1:])[0]
-                        # handshake
-                        if ext_id == 0:
-                            self.peer_ext_support = ext_payload
-                            if "ut_metadata" in self.peer_ext_support["m"]:
-                                self.peer_ext_meta_info = b""
-                                self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
-                                meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
-                                self._send_queue.put((MsgID.EXTENSION, self.peer_ext_meta_id.to_bytes(1) + meta_dict))
-                            self._init_extension = True
-                            print("ext handshake OK")
-                        # metadata
-                        elif self.peer_ext_meta_id and ext_id == self.peer_ext_meta_id:
-                            self.peer_ext_meta_info += ext_payload
-                            self._init_metadata = True
-                        # unexpected
-                        else:
-                            print("new ext msg", ext_id, ext_payload)
-
-                    case _:
-                        print("received unexpected", recv_id, MsgID(recv_id).name, len(recv_payload), recv_payload)
-
-    async def _initialize(self) -> None:
-        self._reader, self._writer = await asyncio.open_connection(*self.address)
-        await self._handshake()
-        await self._ext_handshake()
-
-        self._abort = False
-        self._running = True
-
-        while not self._abort:
-            await asyncio.sleep(0.1)
-            await self._comm_loop()
+                await self._parse_message(recv_id, recv_payload)
 
         self._running = False
 
