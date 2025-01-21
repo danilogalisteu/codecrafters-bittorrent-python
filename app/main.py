@@ -7,7 +7,7 @@ import sys
 import threading
 
 from .protocol.bencode import decode_bencode
-from .protocol.handshake import do_extension_handshake, do_handshake
+from .protocol.handshake import do_handshake
 from .protocol.magnet import parse_magnet
 from .protocol.metainfo import load_metainfo
 from .protocol.peer import Peer, get_peers, print_peers
@@ -56,6 +56,9 @@ def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, pee
 
     for address in peers:
         peer = Peer(address, info_hash, peer_id)
+        peer.initialize()
+        while not peer._init_bitfield:
+            pass
         peer.initialize_pieces(pieces_hash, file_length, piece_length)
         piece = peer.get_piece(piece_index)
         if piece is not None:
@@ -74,6 +77,9 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
     def peer_worker(address: tuple[str, int], jobs: queue.Queue, results: queue.Queue):
         # print("peer", address, "starting")
         peer = Peer(address, info_hash, peer_id)
+        peer.initialize()
+        while not peer._init_bitfield:
+            pass
         peer.initialize_pieces(pieces_hash, file_length, piece_length)
         while True:
             piece_index = jobs.get()
@@ -125,26 +131,20 @@ def run_magnet_handshake(magnet_link: str, peer_id: bytes):
     - magnet3.gif.torrent: magnet:?xt=urn:btih:c5fb9894bdaba464811b088d806bdd611ba490af&dn=magnet3.gif&tr=http%3A%2F%2Fbittorrent-test-tracker.codecrafters.io%2Fannounce
     """
     unknown_length = 1024
-    extension_support = {
-        "ut_metadata": 1,
-    }
+    extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
+    extension_support = {"ut_metadata": 1}
+
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
     peers = get_peers(trackers[0], info_hash, unknown_length, peer_id)
-    if peers:
-        peer = peers[0]
-        reserved_extensions = (1 << 20).to_bytes(8, "big", signed=False)
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect(peer)
-            r_peer_id, r_reserved = do_handshake(sock, info_hash, peer_id, reserved_extensions)
+    address = peers[0]
 
-            comm_buffer = b""
-            supports_extension = ((r_reserved[5] >> 4) & 1) == 1
-            if supports_extension:
-                r_extension_support = do_extension_handshake(sock, extension_support, comm_buffer)
-
-            print(f"Peer ID: {r_peer_id.hex()}")
-            print("Peer Metadata Extension ID:", r_extension_support["ut_metadata"])
+    peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
+    peer.initialize()
+    while not peer._init_extension:
+        pass
+    print(f"Peer ID: {peer.peer_id.hex()}")
+    print("Peer Metadata Extension ID:", peer.extension_support["ut_metadata"])
 
 
 def make_parser(peer_id: bytes):
