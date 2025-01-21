@@ -1,11 +1,14 @@
+import hashlib
+import queue
 import socket
+import struct
+import threading
 import urllib.parse
 import urllib.request
 
-from .bencode import decode_bencode
+from .bencode import encode_bencode, decode_bencode
 from .handshake import do_handshake
 from .message import MsgID, recv_message, send_message
-from .piece import recv_piece
 
 
 def get_peers(tracker: str, info_hash: bytes, file_length: int, peer_id: bytes, port: int=6881):
@@ -44,80 +47,177 @@ class Peer():
         address: tuple[str, int],
         info_hash: bytes,
         client_id: bytes,
-        client_reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00"
+        client_reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00",
+        client_extension_support={},
     ) -> None:
         self.address = address
         self.client_id = client_id
         self.client_reserved = client_reserved
         self.info_hash = info_hash
-        self.pieces_hash = b""
-        self.num_pieces = 0
-        self.file_length = 0
-        self.piece_length = 0
-        self.last_piece_length = 0
+        self.pieces_hash = None
+        self.num_pieces = None
+        self.file_length = None
+        self.piece_length = None
+        self.last_piece_length = None
         self.peer_id = None
         self.reserved = None
+        self.supports_extension = None
+        self.client_extension_support = client_extension_support
+        self.extension_support = {}
         self.bitfield = None
         self.peer_pieces = None
         self._comm_buffer = b""
-        self._sock = None
-        self._initialized = False
-        self._initialized_pieces = False
+        self._recv_length = 1024
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._send_queue = queue.Queue()
+        self._recv_queue = queue.Queue()
+        self._am_choke = True
+        self._am_interested = False
+        self._is_choke = True
+        self._is_interested = False
+        self._init_handshake = False
+        self._init_bitfield = False
+        self._init_extension = False
+        self._init_download = False
+        self._init_pieces = False
+        self._init_comm = False
+        self._stop_comm = False
 
     def __del__(self):
         if self._sock:
             self._sock.close()
 
-    def _has_bitfield_piece(self, bitfield: bytes, piece_index: int) -> bool:
+    def _has_piece(self, piece_index: int) -> bool:
         bitfield_index = piece_index // 8
         byte_mask = 1 << (7 - piece_index % 8)
-        return (bitfield[bitfield_index] & byte_mask) != 0
+        return (self.bitfield[bitfield_index] & byte_mask) != 0
 
     def initialize_pieces(self, pieces_hash: bytes, file_length: int, piece_length: int):
+        if not self._init_comm:
+            self.initialize()
         self.pieces_hash = pieces_hash
         self.num_pieces = len(self.pieces_hash) // 20
         self.file_length = file_length
         self.piece_length = piece_length
         self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
-        self._initialized_pieces = True
+        self.peer_pieces = [
+            piece_index
+            for piece_index in range(self.num_pieces)
+            if self._has_piece(piece_index)
+        ]
 
-    def initialize(self) -> None:
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._init_pieces = True
+
+    def _recv_thread(self):
+        while not self._stop_comm:
+            try:
+                id, payload, self._comm_buffer = recv_message(self._sock, self._comm_buffer, self._recv_length)
+            except TimeoutError:
+                pass
+            else:
+                if id == MsgID.KEEPALIVE:
+                    pass
+                elif id == MsgID.CHOKE:
+                    assert len(payload) == 0
+                    self._am_choke = True
+                elif id == MsgID.UNCHOKE:
+                    assert len(payload) == 0
+                    self._am_choke = False
+                elif id == MsgID.INTERESTED:
+                    assert len(payload) == 0
+                    self._is_interested = True
+                elif id == MsgID.NOTINTERESTED:
+                    assert len(payload) == 0
+                    self._is_interested = False
+                elif id == MsgID.BITFIELD:
+                    self.bitfield = payload
+                    self._init_bitfield = True
+                elif id == MsgID.REQUEST:
+                    pass
+                elif id == MsgID.PIECE:
+                    index = struct.unpack("!I", payload[0:4])[0]
+                    begin = struct.unpack("!I", payload[4:8])[0]
+                    block = payload[8:]
+                    self._recv_queue.put((index, begin, block))
+                elif id == MsgID.EXTENSION:
+                    if payload[0] == 0:  # handshake
+                        self.extension_support = decode_bencode(payload[1:])[0]["m"]
+                        self._init_extension = True
+                else:
+                    print("_recv_thread received unexpected", id, MsgID(id).name, len(payload), payload)
+
+    def _comm_thread(self):
         self._sock.connect(self.address)
 
         # Get peer info
         self.peer_id, self.reserved = do_handshake(self._sock, self.info_hash, self.client_id, self.client_reserved)
+        self._init_handshake = True
 
-        # Exchange bitfields
-        self.bitfield = recv_message(MsgID.BITFIELD, self._sock, self._comm_buffer)
+        self.supports_extension = ((self.reserved[5] >> 4) & 1) == 1
+        print("extension support", self.supports_extension)
 
-        send_message(MsgID.INTERESTED, self._sock)
-        payload = recv_message(MsgID.UNCHOKE, self._sock, self._comm_buffer)
-        assert len(payload) == 0
+        if self.supports_extension:
+            self._send_queue.put((MsgID.EXTENSION, b"\x00" + encode_bencode({"m": self.client_extension_support})))
+        else:
+            self._init_extension = True
 
-        self.peer_pieces = [
-            piece_index
-            for piece_index in range(self.num_pieces)
-            if self._has_bitfield_piece(self.bitfield, piece_index)
-        ]
+        self._init_comm = True
 
-        self._initialized = True
+        threading.Thread(target=self._recv_thread, daemon=True).start()
+
+        while not self._stop_comm:
+            if not self._send_queue.empty():
+                send_id, send_payload = self._send_queue.get()
+                send_message(send_id, self._sock, send_payload)
+
+    def initialize(self) -> None:
+        threading.Thread(target=self._comm_thread, daemon=True).start()
 
     def has_piece(self, piece_index: int) -> bool:
+        if not self._init_comm:
+            self.initialize()
+        if not self._init_pieces:
+            raise ValueError("piece info not initialized")
         if piece_index < 0 or piece_index >= self.num_pieces:
             return False
-        if not self._initialized:
-            self.initialize()
         return piece_index in self.peer_pieces
 
     def get_piece(self, piece_index: int) -> bytes | None:
-        if not self._initialized_pieces:
-            raise ValueError("piece info not initialized")
-
         if not self.has_piece(piece_index):
             return
+
+        if not self._am_interested:
+            self._am_interested = True
+            self._send_queue.put((MsgID.INTERESTED, b""))
+
+        while self._am_choke:
+            pass
 
         piece_length = self.piece_length if piece_index < self.num_pieces - 1 else self.last_piece_length
         assert piece_length > 0
 
-        return recv_piece(self._sock, piece_index, self.pieces_hash[piece_index*20: piece_index*20+20], piece_length)
+        piece = b""
+        self._recv_length = 4*1024
+        chunk_length = 16*1024
+        current_begin = 0
+        while current_begin < piece_length:
+            eff_chunk_length = min(chunk_length, piece_length - current_begin)
+            print("sending request", piece_index, current_begin, eff_chunk_length)
+            self._send_queue.put((MsgID.REQUEST, struct.pack("!III", piece_index, current_begin, eff_chunk_length)))
+
+            while True:
+                if not self._recv_queue.empty():
+                    r_index, r_begin, r_block = self._recv_queue.get()
+                    print("received response", r_index, r_begin, r_block)
+                    if r_index == piece_index and r_begin == current_begin:
+                        piece += r_block
+                        current_begin += len(r_block)
+                        break
+                    else:
+                        self._recv_queue.put((r_index, r_begin, r_block))
+
+        self._recv_length = 1024
+
+        r_piece_hash = hashlib.sha1(piece).digest()
+        if r_piece_hash == self.pieces_hash[piece_index*20: piece_index*20+20]:
+            return piece
