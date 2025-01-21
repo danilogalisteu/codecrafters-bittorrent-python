@@ -64,6 +64,8 @@ class Peer:
         self.supports_extension = None
         self.client_extension_support = client_extension_support
         self.extension_support = None
+        self.extension_meta_id = None
+        self.extension_meta_info = None
         self.bitfield = None
         self.peer_pieces = None
         self._comm_buffer = b""
@@ -78,6 +80,7 @@ class Peer:
         self._init_handshake = False
         self._init_bitfield = False
         self._init_extension = False
+        self._init_meta = False
         self._init_download = False
         self._init_pieces = False
         self._init_comm = False
@@ -133,25 +136,36 @@ class Peer:
                     case MsgID.BITFIELD:
                         self.bitfield = payload
                         self._init_bitfield = True
-                    case MsgID.REQUEST:
-                        pass
                     case MsgID.PIECE:
                         index = struct.unpack("!I", payload[0:4])[0]
                         begin = struct.unpack("!I", payload[4:8])[0]
                         block = payload[8:]
                         self._recv_queue.put((index, begin, block))
                     case MsgID.EXTENSION:
-                        if payload[0] == 0:  # handshake
-                            self.extension_support = decode_bencode(payload[1:])[0]["m"]
-                            ext_id = self.extension_support["ut_metadata"].to_bytes(1)
-                            self._send_queue.put((MsgID.EXTENSION, ext_id + encode_bencode({"msg_type": 0, "piece": 0})))
+                        ext_id = payload[0]
+                        ext_payload = decode_bencode(payload[1:])[0]
+
+                        # handshake
+                        if ext_id == 0:
+                            self.extension_support = ext_payload
+
+                            if "ut_metadata" in self.extension_support["m"]:
+                                self.extension_meta_id = self.extension_support["m"]["ut_metadata"]
+                                meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
+                                self._send_queue.put((MsgID.EXTENSION, self.extension_meta_id.to_bytes(1) + meta_dict))
+
                             self._init_extension = True
+                        # metadata
+                        elif self.extension_meta_id and ext_id == self.extension_meta_id:
+                            self.extension_meta_info = ext_payload
+
+                        else:
+                            print("new ext msg", ext_id, ext_payload)
+
                     case _:
                         print("_recv_thread received unexpected", recv_id, MsgID(recv_id).name, len(payload), payload)
 
     def _send_thread(self) -> None:
-        self._sock.connect(self.address)
-
         # Get peer info
         self.peer_id, self.reserved = do_handshake(self._sock, self.info_hash, self.client_id, self.client_reserved)
         self._init_handshake = True
@@ -173,7 +187,10 @@ class Peer:
                 send_message(send_id, self._sock, send_payload)
 
     def initialize(self) -> None:
+        self._sock.connect(self.address)
+
         threading.Thread(target=self._send_thread, daemon=True).start()
+
         while not self._init_extension:
             pass
 

@@ -133,7 +133,7 @@ def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
     """
     unknown_length = 1024
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
-    extension_support = {"ut_metadata": 1}
+    extension_support = {"m": {"ut_metadata": 1}}
 
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
@@ -142,14 +142,17 @@ def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
 
     peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
     peer.initialize()
+    while peer.extension_support is None:
+        pass
+
     print(f"Peer ID: {peer.peer_id.hex()}")
-    print("Peer Metadata Extension ID:", peer.extension_support["ut_metadata"])
+    print("Peer Metadata Extension ID:", peer.extension_support["m"]["ut_metadata"])
 
 
 def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
     unknown_length = 1024
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
-    extension_support = {"ut_metadata": 1}
+    extension_support = {"m": {"ut_metadata": 1}}
 
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
@@ -158,8 +161,22 @@ def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
 
     peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
     peer.initialize()
-    print(f"Peer ID: {peer.peer_id.hex()}")
-    print("Peer Metadata Extension ID:", peer.extension_support["ut_metadata"])
+    while peer.extension_support is None:
+        pass
+
+    print(peer.extension_support)
+
+    # wait for update
+    print(peer.extension_meta_info)
+
+    print("Peer ID:", peer.peer_id.hex())
+    print("Peer Metadata Extension ID:", peer.extension_support["m"]["ut_metadata"])
+
+    print("Tracker URL:", trackers[0])
+    print("Length:")
+    print("Info Hash:", info_hash_str)
+    print("Piece Length:")
+    print("Piece Hashes:")
 
 
 def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
