@@ -1,5 +1,6 @@
 import argparse
 import json
+import pathlib
 import queue
 import secrets
 import socket
@@ -65,7 +66,7 @@ def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, pee
             break
 
     if piece is not None:
-        with open(piece_file, "wb") as file:
+        with pathlib.Path(piece_file).open("wb") as file:
             file.write(piece)
     else:
         print(f"Piece {piece_index} not found in any peer")
@@ -112,7 +113,7 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None:
     if missing_pieces:
         print("Some pieces are missing:", ", ".join(missing_pieces))
     else:
-        with open(out_file, "wb") as file:
+        with pathlib.Path(out_file).open("wb") as file:
             for piece in pieces:
                 file.write(piece)
 

@@ -63,7 +63,7 @@ def recv_message(sock: socket.SocketType, buffer: bytes, recv_length: int=1024) 
             continue
         print("received", recv_id, MsgID(recv_id).name, len(payload), payload)
         break
-    return id, payload, buffer
+    return recv_id, payload, buffer
 
 
 def send_message(send_id: int, sock: socket.SocketType, payload: bytes=b"") -> None:
