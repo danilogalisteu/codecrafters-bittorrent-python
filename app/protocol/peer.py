@@ -88,7 +88,6 @@ class Peer:
                 assert self.info_hash == r_info_hash
                 self._comm_buffer = self._comm_buffer[handshake_len:]
                 self._init_handshake = True
-                print("handshake OK")
             except IndexError:
                 pass
 
@@ -99,7 +98,6 @@ class Peer:
             self._send_queue.put((MsgID.EXTENSION, ext_handshake_payload))
         else:
             self._init_extension = True
-            print("ext handshake NOK")
 
     async def _parse_message(self, recv_id: int, recv_payload: bytes) -> None:
         match recv_id:
@@ -138,7 +136,6 @@ class Peer:
                         meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
                         self._send_queue.put((MsgID.EXTENSION, self.peer_ext_meta_id.to_bytes(1) + meta_dict))
                     self._init_extension = True
-                    print("ext handshake OK")
                 # metadata
                 elif self.peer_ext_meta_id and ext_id == self.client_ext_support["m"]["ut_metadata"]:
                     self.peer_ext_meta_info = ext_payload
@@ -159,7 +156,7 @@ class Peer:
         self._running = True
 
         while not self._abort:
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0)
 
             # send one message from queue
             if not self._send_queue.empty():
