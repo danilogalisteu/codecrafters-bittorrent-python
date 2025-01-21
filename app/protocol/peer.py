@@ -140,12 +140,12 @@ class Peer:
                     self._init_extension = True
                     print("ext handshake OK")
                 # metadata
-                elif self.peer_ext_meta_id and ext_id == self.peer_ext_meta_id:
+                elif self.peer_ext_meta_id and ext_id == self.client_ext_support["m"]["ut_metadata"]:
                     self.peer_ext_meta_info = ext_payload
                     self._init_metadata = True
                 # unexpected
                 else:
-                    print("new ext msg", ext_id, ext_payload)
+                    print("new ext msg id", ext_id, ext_payload)
 
             case _:
                 print("received unexpected", recv_id, MsgID(recv_id).name, len(recv_payload), recv_payload)
