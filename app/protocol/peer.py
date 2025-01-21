@@ -1,14 +1,14 @@
+import asyncio
 import hashlib
 import queue
-import socket
 import struct
 import threading
 import urllib.parse
 import urllib.request
 
 from .bencode import decode_bencode, encode_bencode
-from .handshake import do_handshake
-from .message import MsgID, recv_message, send_message
+from .handshake import decode_handshake, encode_handshake
+from .message import MsgID, decode_message, encode_message
 
 
 def get_peers(tracker: str, info_hash: bytes, file_length: int, peer_id: bytes, port: int=6881) -> list[tuple[str, int]]:
@@ -48,56 +48,172 @@ class Peer:
         info_hash: bytes,
         client_id: bytes,
         client_reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00",
-        client_extension_support: dict | None=None,
+        client_ext_support: dict | None=None,
     ) -> None:
         self.address = address
+        self.info_hash = info_hash
         self.client_id = client_id
         self.client_reserved = client_reserved
-        self.info_hash = info_hash
+
+        # handshake
+        self.peer_id = None
+        self.peer_reserved = None
+
+        self.bitfield = None
+        self.peer_supports_extension = None
+        self.client_ext_support = client_ext_support
+        self.peer_ext_support = None
+        self.peer_ext_meta_id = None
+        self.peer_ext_meta_info = None
+
         self.pieces_hash = None
         self.num_pieces = None
         self.file_length = None
         self.piece_length = None
         self.last_piece_length = None
-        self.peer_id = None
-        self.reserved = None
-        self.supports_extension = None
-        self.client_extension_support = client_extension_support
-        self.extension_support = None
-        self.extension_meta_id = None
-        self.extension_meta_info = None
-        self.bitfield = None
-        self.peer_pieces = None
+
+        self._comm_task = None
+        self._running = False
+        self._abort = False
+        self._reader = None
+        self._writer = None
         self._comm_buffer = b""
         self._recv_length = 1024
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._send_queue = queue.Queue()
         self._recv_queue = queue.Queue()
+
         self._am_choke = True
         self._am_interested = False
         self._is_choke = True
         self._is_interested = False
+
         self._init_handshake = False
-        self._init_bitfield = False
         self._init_extension = False
-        self._init_meta = False
-        self._init_download = False
+        self._init_metadata = False
         self._init_pieces = False
-        self._init_comm = False
-        self._stop_comm = False
 
-    def __del__(self) -> None:
-        if self._sock:
-            self._sock.close()
-
-    def _has_piece(self, piece_index: int) -> bool:
+    def _bitfield_has_piece(self, piece_index: int) -> bool:
         bitfield_index = piece_index // 8
         byte_mask = 1 << (7 - piece_index % 8)
         return (self.bitfield[bitfield_index] & byte_mask) != 0
 
+    async def _handshake(self):
+        pstr = b"BitTorrent protocol"
+        handshake_len = len(pstr) + 1 + 8 + 20 + 20
+
+        self._writer.write(encode_handshake(pstr, self.info_hash, self.client_id, self.client_reserved))
+        await self._writer.drain()
+
+        while not self._init_handshake:
+            self._comm_buffer += await self._reader.read(handshake_len)
+            try:
+                r_pstr, self.peer_reserved, r_info_hash, self.peer_id = decode_handshake(self._comm_buffer)
+                assert pstr == r_pstr
+                assert self.info_hash == r_info_hash
+                self._comm_buffer = self._comm_buffer[handshake_len:]
+                self._init_handshake = True
+                print("handshake OK")
+            except IndexError:
+                pass
+
+    async def _ext_handshake(self):
+        self.supports_extension = ((self.peer_reserved[5] >> 4) & 1) == 1
+        if self.supports_extension and self.client_ext_support:
+            ext_handshake_payload = b"\x00" + encode_bencode({"m": self.client_ext_support})
+            self._send_queue.put((MsgID.EXTENSION, ext_handshake_payload))
+        else:
+            self._init_extension = True
+            print("ext handshake NOK")
+
+    async def _comm_loop(self):
+            # send one message from queue
+            if not self._send_queue.empty():
+                send_id, send_payload = self._send_queue.get()
+                print("sending", send_id, MsgID(send_id).name, len(send_payload), send_payload)
+                self._writer.write(encode_message(send_id, send_payload))
+                await self._writer.drain()
+
+            # try to parse one message
+            try:
+                recv_id, recv_payload, self._comm_buffer = decode_message(self._comm_buffer)
+                print("received", recv_id, MsgID(recv_id).name, len(recv_payload), recv_payload)
+            except IndexError:
+                # Incomplete message
+                self._comm_buffer += await self._reader.read(self._recv_length)
+            else:
+                match recv_id:
+                    case MsgID.KEEPALIVE:
+                        pass
+                    case MsgID.CHOKE:
+                        assert len(recv_payload) == 0
+                        self._am_choke = True
+                    case MsgID.UNCHOKE:
+                        assert len(recv_payload) == 0
+                        self._am_choke = False
+                    case MsgID.INTERESTED:
+                        assert len(recv_payload) == 0
+                        self._is_interested = True
+                    case MsgID.NOTINTERESTED:
+                        assert len(recv_payload) == 0
+                        self._is_interested = False
+                    case MsgID.BITFIELD:
+                        self.bitfield = recv_payload
+                    case MsgID.PIECE:
+                        index = struct.unpack("!I", recv_payload[0:4])[0]
+                        begin = struct.unpack("!I", recv_payload[4:8])[0]
+                        block = recv_payload[8:]
+                        self._recv_queue.put((index, begin, block))
+                    case MsgID.EXTENSION:
+                        ext_id = recv_payload[0]
+                        ext_payload = decode_bencode(recv_payload[1:])[0]
+                        # handshake
+                        if ext_id == 0:
+                            self.peer_ext_support = ext_payload
+                            if "ut_metadata" in self.peer_ext_support["m"]:
+                                self.peer_ext_meta_info = b""
+                                self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
+                                meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
+                                self._send_queue.put((MsgID.EXTENSION, self.peer_ext_meta_id.to_bytes(1) + meta_dict))
+                            self._init_extension = True
+                            print("ext handshake OK")
+                        # metadata
+                        elif self.peer_ext_meta_id and ext_id == self.peer_ext_meta_id:
+                            self.peer_ext_meta_info += ext_payload
+                            self._init_metadata = True
+                        # unexpected
+                        else:
+                            print("new ext msg", ext_id, ext_payload)
+
+                    case _:
+                        print("received unexpected", recv_id, MsgID(recv_id).name, len(recv_payload), recv_payload)
+
+    async def _initialize(self):
+        self._reader, self._writer = await asyncio.open_connection(*self.address)
+        await self._handshake()
+        await self._ext_handshake()
+
+        self._abort = False
+        self._running = True
+
+        while not self._abort:
+            await asyncio.sleep(0.1)
+            await self._comm_loop()
+
+        self._running = False
+
+    def initialize(self):
+        self._comm_task = threading.Thread(target=asyncio.run, args=(self._initialize(),), daemon=True)
+        self._comm_task.start()
+
+    def abort(self):
+        self._abort = True
+        while self._running:
+            pass
+
     def initialize_pieces(self, pieces_hash: bytes, file_length: int, piece_length: int) -> None:
-        if not self._init_comm:
-            self.initialize()
+        while not self.bitfield:
+            pass
+
         self.pieces_hash = pieces_hash
         self.num_pieces = len(self.pieces_hash) // 20
         self.file_length = file_length
@@ -106,99 +222,14 @@ class Peer:
         self.peer_pieces = [
             piece_index
             for piece_index in range(self.num_pieces)
-            if self._has_piece(piece_index)
+            if self._bitfield_has_piece(piece_index)
         ]
 
         self._init_pieces = True
 
-    def _recv_thread(self) -> None:
-        while not self._stop_comm:
-            try:
-                recv_id, payload, self._comm_buffer = recv_message(self._sock, self._comm_buffer, self._recv_length)
-            except TimeoutError:
-                pass
-            else:
-                match recv_id:
-                    case MsgID.KEEPALIVE:
-                        pass
-                    case MsgID.CHOKE:
-                        assert len(payload) == 0
-                        self._am_choke = True
-                    case MsgID.UNCHOKE:
-                        assert len(payload) == 0
-                        self._am_choke = False
-                    case MsgID.INTERESTED:
-                        assert len(payload) == 0
-                        self._is_interested = True
-                    case MsgID.NOTINTERESTED:
-                        assert len(payload) == 0
-                        self._is_interested = False
-                    case MsgID.BITFIELD:
-                        self.bitfield = payload
-                        self._init_bitfield = True
-                    case MsgID.PIECE:
-                        index = struct.unpack("!I", payload[0:4])[0]
-                        begin = struct.unpack("!I", payload[4:8])[0]
-                        block = payload[8:]
-                        self._recv_queue.put((index, begin, block))
-                    case MsgID.EXTENSION:
-                        ext_id = payload[0]
-                        ext_payload = decode_bencode(payload[1:])[0]
-
-                        # handshake
-                        if ext_id == 0:
-                            self.extension_support = ext_payload
-
-                            if "ut_metadata" in self.extension_support["m"]:
-                                self.extension_meta_id = self.extension_support["m"]["ut_metadata"]
-                                meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
-                                self._send_queue.put((MsgID.EXTENSION, self.extension_meta_id.to_bytes(1) + meta_dict))
-
-                            self._init_extension = True
-                        # metadata
-                        elif self.extension_meta_id and ext_id == self.extension_meta_id:
-                            self.extension_meta_info = ext_payload
-
-                        else:
-                            print("new ext msg", ext_id, ext_payload)
-
-                    case _:
-                        print("_recv_thread received unexpected", recv_id, MsgID(recv_id).name, len(payload), payload)
-
-    def _send_thread(self) -> None:
-        # Get peer info
-        self.peer_id, self.reserved = do_handshake(self._sock, self.info_hash, self.client_id, self.client_reserved)
-        self._init_handshake = True
-
-        self.supports_extension = ((self.reserved[5] >> 4) & 1) == 1
-
-        if self.supports_extension and self.client_extension_support:
-            self._send_queue.put((MsgID.EXTENSION, b"\x00" + encode_bencode({"m": self.client_extension_support})))
-        else:
-            self._init_extension = True
-
-        self._init_comm = True
-
-        threading.Thread(target=self._recv_thread, daemon=True).start()
-
-        while not self._stop_comm:
-            if not self._send_queue.empty():
-                send_id, send_payload = self._send_queue.get()
-                send_message(send_id, self._sock, send_payload)
-
-    def initialize(self) -> None:
-        self._sock.connect(self.address)
-
-        threading.Thread(target=self._send_thread, daemon=True).start()
-
-        while not self._init_extension:
-            pass
-
     def has_piece(self, piece_index: int) -> bool:
-        if not self._init_comm:
-            self.initialize()
         if not self._init_pieces:
-            raise ValueError("piece info not initialized")
+            raise ValueError("pieces info not initialized")
         if piece_index < 0 or piece_index >= self.num_pieces:
             return False
         return piece_index in self.peer_pieces

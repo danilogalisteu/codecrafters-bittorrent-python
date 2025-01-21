@@ -58,8 +58,6 @@ def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, pee
     for address in peers:
         peer = Peer(address, info_hash, peer_id)
         peer.initialize()
-        while not peer.bitfield:
-            pass
         peer.initialize_pieces(pieces_hash, file_length, piece_length)
         piece = peer.get_piece(piece_index)
         if piece is not None:
@@ -79,8 +77,6 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None:
         # print("peer", address, "starting")
         peer = Peer(address, info_hash, peer_id)
         peer.initialize()
-        while not peer.bitfield:
-            pass
         peer.initialize_pieces(pieces_hash, file_length, piece_length)
         while True:
             piece_index = jobs.get()
@@ -142,11 +138,11 @@ def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
 
     peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
     peer.initialize()
-    while peer.extension_support is None:
+    while peer.peer_ext_support is None:
         pass
 
     print(f"Peer ID: {peer.peer_id.hex()}")
-    print("Peer Metadata Extension ID:", peer.extension_support["m"]["ut_metadata"])
+    print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
 
 
 def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
@@ -161,16 +157,17 @@ def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
 
     peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
     peer.initialize()
-    while peer.extension_support is None:
+
+    while not peer.peer_ext_support:
         pass
+    print("peer_ext_support", peer.peer_ext_support)
 
-    print(peer.extension_support)
-
-    # wait for update
-    print(peer.extension_meta_info)
+    while not peer.peer_ext_meta_info:
+        pass
+    print("peer_ext_meta_info", peer.peer_ext_meta_info)
 
     print("Peer ID:", peer.peer_id.hex())
-    print("Peer Metadata Extension ID:", peer.extension_support["m"]["ut_metadata"])
+    print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
 
     print("Tracker URL:", trackers[0])
     print("Length:")
