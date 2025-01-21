@@ -134,7 +134,6 @@ class Peer:
                 if ext_id == 0:
                     self.peer_ext_support = ext_payload
                     if "ut_metadata" in self.peer_ext_support["m"]:
-                        self.peer_ext_meta_info = b""
                         self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
                         meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
                         self._send_queue.put((MsgID.EXTENSION, self.peer_ext_meta_id.to_bytes(1) + meta_dict))
@@ -142,7 +141,7 @@ class Peer:
                     print("ext handshake OK")
                 # metadata
                 elif self.peer_ext_meta_id and ext_id == self.peer_ext_meta_id:
-                    self.peer_ext_meta_info += ext_payload
+                    self.peer_ext_meta_info = ext_payload
                     self._init_metadata = True
                 # unexpected
                 else:
