@@ -5,11 +5,16 @@ import struct
 
 class MsgID(IntEnum):
     KEEPALIVE = -1
+    CHOKE = 0
     UNCHOKE = 1
     INTERESTED = 2
+    NOTINTERESTED = 3
+    HAVE = 4
     BITFIELD = 5
     REQUEST = 6
     PIECE = 7
+    CANCEL = 8
+    PORT = 9
     EXTENSION = 20
 
 
@@ -26,36 +31,39 @@ def encode_message(id: int=None, payload: bytes=b"") -> bytes:
 
 def decode_message(buffer: bytes) -> tuple[int, bytes]:
     len_buffer = len(buffer)
+
     if len_buffer < 4:
         # Signal incomplete message
         raise IndexError
     payload_length = struct.unpack("!I", buffer[:4])[0]
+
     if payload_length > len_buffer - 4:
         # Signal incomplete message
         raise IndexError
+
     id, payload = -1, b""
     if payload_length > 0:
         id = buffer[4]
     if payload_length > 1:
         payload = buffer[5:4+payload_length]
-    return id, payload
+
+    # Drop parsed data from buffer
+    buffer = buffer[4+payload_length:]
+
+    return id, payload, buffer
 
 
-def recv_message(recv_id: int, sock: socket.SocketType, buffer: bytes, recv_length: int=1024) -> bytes:
+def recv_message(sock: socket.SocketType, buffer: bytes, recv_length: int=1024) -> tuple[int, bytes, bytes]:
     while True:
         try:
-            id, payload = decode_message(buffer)
-            # Drop parsed data from buffer
-            parsed_length = 4 + (1 if id > -1 else 0) + len(payload)
-            buffer = buffer[parsed_length:] if len(buffer) > parsed_length else b""
+            id, payload, buffer = decode_message(buffer)
         except IndexError:
             # Incomplete message
             buffer += sock.recv(recv_length)
             continue
         print("received", id, MsgID(id).name, len(payload), payload)
-        if id == recv_id:
-            break
-    return payload
+        break
+    return id, payload, buffer
 
 
 def send_message(send_id: int, sock: socket.SocketType, payload: bytes=b""):
