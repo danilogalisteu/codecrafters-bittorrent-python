@@ -143,6 +143,8 @@ class Peer:
                     case MsgID.EXTENSION:
                         if payload[0] == 0:  # handshake
                             self.extension_support = decode_bencode(payload[1:])[0]["m"]
+                            ext_id = self.extension_support["ut_metadata"].to_bytes(1)
+                            self._send_queue.put((MsgID.EXTENSION, ext_id + encode_bencode({"msg_type": 0, "piece": 0})))
                             self._init_extension = True
                     case _:
                         print("_recv_thread received unexpected", recv_id, MsgID(recv_id).name, len(payload), payload)
