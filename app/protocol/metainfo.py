@@ -1,6 +1,6 @@
 import hashlib
 
-from .bencode import encode_bencode, decode_bencode
+from .bencode import decode_bencode, encode_bencode
 
 
 def load_metainfo(file_name: str, show_info: bool=False) -> tuple[dict, str, bytes, bytes, int, int] | None:

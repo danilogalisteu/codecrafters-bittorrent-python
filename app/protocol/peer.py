@@ -6,7 +6,7 @@ import threading
 import urllib.parse
 import urllib.request
 
-from .bencode import encode_bencode, decode_bencode
+from .bencode import decode_bencode, encode_bencode
 from .handshake import do_handshake
 from .message import MsgID, recv_message, send_message
 
@@ -146,7 +146,7 @@ class Peer:
                 else:
                     print("_recv_thread received unexpected", id, MsgID(id).name, len(payload), payload)
 
-    def _comm_thread(self) -> None:
+    def _send_thread(self) -> None:
         self._sock.connect(self.address)
 
         # Get peer info
@@ -171,7 +171,9 @@ class Peer:
                 send_message(send_id, self._sock, send_payload)
 
     def initialize(self) -> None:
-        threading.Thread(target=self._comm_thread, daemon=True).start()
+        threading.Thread(target=self._send_thread, daemon=True).start()
+        while not self._init_extension:
+            pass
 
     def has_piece(self, piece_index: int) -> bool:
         if not self._init_comm:

@@ -1,6 +1,6 @@
-from enum import IntEnum
 import socket
 import struct
+from enum import IntEnum
 
 
 class MsgID(IntEnum):

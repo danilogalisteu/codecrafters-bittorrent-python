@@ -141,8 +141,6 @@ def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
 
     peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
     peer.initialize()
-    while not peer._init_extension:
-        pass
     print(f"Peer ID: {peer.peer_id.hex()}")
     print("Peer Metadata Extension ID:", peer.extension_support["ut_metadata"])
 
