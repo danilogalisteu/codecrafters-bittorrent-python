@@ -8,7 +8,7 @@ import sys
 import threading
 
 from .protocol.bencode import decode_bencode
-from .protocol.handshake import do_handshake
+from .protocol.handshake import decode_handshake, encode_handshake
 from .protocol.magnet import parse_magnet
 from .protocol.metainfo import load_metainfo
 from .protocol.peer import Peer, get_peers, print_peers
@@ -43,7 +43,11 @@ def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes) -> None:
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect(peer)
-        r_peer_id, _ = do_handshake(sock, info_hash, peer_id)
+        protocol = b"BitTorrent protocol"
+        sock.send(encode_handshake(protocol, info_hash, peer_id))
+        r_pstr, _, r_info_hash, r_peer_id = decode_handshake(sock.recv(1024))
+        assert protocol == r_pstr
+        assert info_hash == r_info_hash
         print(f"Peer ID: {r_peer_id.hex()}")
 
 

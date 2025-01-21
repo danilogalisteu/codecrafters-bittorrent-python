@@ -19,12 +19,3 @@ def decode_handshake(data: bytes) -> tuple[bytes, bytes, bytes, bytes]:
     r_info_hash = data[1+r_pstrlen+8:1+r_pstrlen+8+20]
     r_peer_id = data[1+r_pstrlen+8+20:1+r_pstrlen+8+20+20]
     return r_pstr, r_reserved_, r_info_hash, r_peer_id
-
-
-def do_handshake(sock: socket.SocketType, info_hash: bytes, peer_id: bytes, reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00") -> tuple[bytes, bytes]:
-    protocol = b"BitTorrent protocol"
-    sock.send(encode_handshake(protocol, info_hash, peer_id, reserved))
-    r_pstr, r_reserved, r_info_hash, r_peer_id = decode_handshake(sock.recv(1024))
-    assert protocol == r_pstr
-    assert info_hash == r_info_hash
-    return r_peer_id, r_reserved
