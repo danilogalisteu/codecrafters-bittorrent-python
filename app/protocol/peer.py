@@ -115,36 +115,37 @@ class Peer:
             except TimeoutError:
                 pass
             else:
-                if recv_id == MsgID.KEEPALIVE:
-                    pass
-                elif recv_id == MsgID.CHOKE:
-                    assert len(payload) == 0
-                    self._am_choke = True
-                elif recv_id == MsgID.UNCHOKE:
-                    assert len(payload) == 0
-                    self._am_choke = False
-                elif recv_id == MsgID.INTERESTED:
-                    assert len(payload) == 0
-                    self._is_interested = True
-                elif recv_id == MsgID.NOTINTERESTED:
-                    assert len(payload) == 0
-                    self._is_interested = False
-                elif recv_id == MsgID.BITFIELD:
-                    self.bitfield = payload
-                    self._init_bitfield = True
-                elif recv_id == MsgID.REQUEST:
-                    pass
-                elif recv_id == MsgID.PIECE:
-                    index = struct.unpack("!I", payload[0:4])[0]
-                    begin = struct.unpack("!I", payload[4:8])[0]
-                    block = payload[8:]
-                    self._recv_queue.put((index, begin, block))
-                elif recv_id == MsgID.EXTENSION:
-                    if payload[0] == 0:  # handshake
-                        self.extension_support = decode_bencode(payload[1:])[0]["m"]
-                        self._init_extension = True
-                else:
-                    print("_recv_thread received unexpected", recv_id, MsgID(recv_id).name, len(payload), payload)
+                match recv_id:
+                    case MsgID.KEEPALIVE:
+                        pass
+                    case MsgID.CHOKE:
+                        assert len(payload) == 0
+                        self._am_choke = True
+                    case MsgID.UNCHOKE:
+                        assert len(payload) == 0
+                        self._am_choke = False
+                    case MsgID.INTERESTED:
+                        assert len(payload) == 0
+                        self._is_interested = True
+                    case MsgID.NOTINTERESTED:
+                        assert len(payload) == 0
+                        self._is_interested = False
+                    case MsgID.BITFIELD:
+                        self.bitfield = payload
+                        self._init_bitfield = True
+                    case MsgID.REQUEST:
+                        pass
+                    case MsgID.PIECE:
+                        index = struct.unpack("!I", payload[0:4])[0]
+                        begin = struct.unpack("!I", payload[4:8])[0]
+                        block = payload[8:]
+                        self._recv_queue.put((index, begin, block))
+                    case MsgID.EXTENSION:
+                        if payload[0] == 0:  # handshake
+                            self.extension_support = decode_bencode(payload[1:])[0]["m"]
+                            self._init_extension = True
+                    case _:
+                        print("_recv_thread received unexpected", recv_id, MsgID(recv_id).name, len(payload), payload)
 
     def _send_thread(self) -> None:
         self._sock.connect(self.address)
