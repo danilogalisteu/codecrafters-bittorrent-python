@@ -3,15 +3,6 @@ import hashlib
 from .bencode import encode_bencode, decode_bencode
 
 
-def parse_metainfo_pieces(pieces: bytes) -> list[bytes]:
-    pos = 0
-    pieces_list = []
-    while pos < len(pieces):
-        pieces_list.append(pieces[pos:pos+20])
-        pos += 20
-    return pieces_list
-
-
 def load_metainfo(file_name: str, show_info=False) -> tuple[dict, str, bytes, bytes, int, int] | None:
     with open(file_name, "rb") as file:
         metainfo, _ = decode_bencode(file.read())
@@ -27,7 +18,7 @@ def load_metainfo(file_name: str, show_info=False) -> tuple[dict, str, bytes, by
             print(f"Info Hash: {info_hash.hex()}")
             print(f"Piece Length: {piece_length}")
             print("Piece Hashes:")
-            for piece in parse_metainfo_pieces(pieces_hash):
-                print(piece.hex())
+            for piece_index in range(len(pieces_hash) // 20):
+                print(pieces_hash[piece_index*20:piece_index*20+20].hex())
 
         return tracker, info_hash, pieces_hash, file_length, piece_length
