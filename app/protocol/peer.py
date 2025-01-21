@@ -95,7 +95,7 @@ class Peer:
     async def _ext_handshake(self) -> None:
         self.supports_extension = ((self.peer_reserved[5] >> 4) & 1) == 1
         if self.supports_extension and self.client_ext_support:
-            ext_handshake_payload = b"\x00" + encode_bencode({"m": self.client_ext_support})
+            ext_handshake_payload = b"\x00" + encode_bencode(self.client_ext_support)
             self._send_queue.put((MsgID.EXTENSION, ext_handshake_payload))
         else:
             self._init_extension = True
