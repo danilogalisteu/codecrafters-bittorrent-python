@@ -11,7 +11,7 @@ from .handshake import do_handshake
 from .message import MsgID, recv_message, send_message
 
 
-def get_peers(tracker: str, info_hash: bytes, file_length: int, peer_id: bytes, port: int=6881):
+def get_peers(tracker: str, info_hash: bytes, file_length: int, peer_id: bytes, port: int=6881) -> list[tuple[str, int]]:
     query = {
         "info_hash": info_hash,
         "peer_id": peer_id,
@@ -36,19 +36,19 @@ def get_peers(tracker: str, info_hash: bytes, file_length: int, peer_id: bytes, 
     return peers
 
 
-def print_peers(peers: list[tuple[str, int]]):
+def print_peers(peers: list[tuple[str, int]]) -> None:
     for peer in peers:
         print(f"{peer[0]}:{peer[1]}")
 
 
-class Peer():
+class Peer:
     def __init__(
         self,
         address: tuple[str, int],
         info_hash: bytes,
         client_id: bytes,
         client_reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00",
-        client_extension_support={},
+        client_extension_support: dict={},
     ) -> None:
         self.address = address
         self.client_id = client_id
@@ -83,7 +83,7 @@ class Peer():
         self._init_comm = False
         self._stop_comm = False
 
-    def __del__(self):
+    def __del__(self) -> None:
         if self._sock:
             self._sock.close()
 
@@ -92,7 +92,7 @@ class Peer():
         byte_mask = 1 << (7 - piece_index % 8)
         return (self.bitfield[bitfield_index] & byte_mask) != 0
 
-    def initialize_pieces(self, pieces_hash: bytes, file_length: int, piece_length: int):
+    def initialize_pieces(self, pieces_hash: bytes, file_length: int, piece_length: int) -> None:
         if not self._init_comm:
             self.initialize()
         self.pieces_hash = pieces_hash
@@ -108,7 +108,7 @@ class Peer():
 
         self._init_pieces = True
 
-    def _recv_thread(self):
+    def _recv_thread(self) -> None:
         while not self._stop_comm:
             try:
                 id, payload, self._comm_buffer = recv_message(self._sock, self._comm_buffer, self._recv_length)
@@ -146,7 +146,7 @@ class Peer():
                 else:
                     print("_recv_thread received unexpected", id, MsgID(id).name, len(payload), payload)
 
-    def _comm_thread(self):
+    def _comm_thread(self) -> None:
         self._sock.connect(self.address)
 
         # Get peer info
@@ -184,7 +184,7 @@ class Peer():
 
     def get_piece(self, piece_index: int) -> bytes | None:
         if not self.has_piece(piece_index):
-            return
+            return None
 
         if not self._am_interested:
             self._am_interested = True
@@ -213,11 +213,12 @@ class Peer():
                         piece += r_block
                         current_begin += len(r_block)
                         break
-                    else:
-                        self._recv_queue.put((r_index, r_begin, r_block))
+                    self._recv_queue.put((r_index, r_begin, r_block))
 
         self._recv_length = 1024
 
         r_piece_hash = hashlib.sha1(piece).digest()
         if r_piece_hash == self.pieces_hash[piece_index*20: piece_index*20+20]:
             return piece
+
+        return None

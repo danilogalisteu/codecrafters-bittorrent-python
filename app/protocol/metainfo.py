@@ -3,15 +3,15 @@ import hashlib
 from .bencode import encode_bencode, decode_bencode
 
 
-def load_metainfo(file_name: str, show_info=False) -> tuple[dict, str, bytes, bytes, int, int] | None:
+def load_metainfo(file_name: str, show_info: bool=False) -> tuple[dict, str, bytes, bytes, int, int] | None:
     with open(file_name, "rb") as file:
         metainfo, _ = decode_bencode(file.read())
-        tracker = metainfo['announce']
+        tracker = metainfo["announce"]
         info_hash = hashlib.sha1(encode_bencode(metainfo["info"])).digest()
         pieces_hash = metainfo["info"]["pieces"]
         file_length = metainfo["info"]["length"]
         piece_length = metainfo["info"]["piece length"]
-    
+
         if show_info:
             print(f"Tracker URL: {tracker}")
             print(f"Length: {file_length}")

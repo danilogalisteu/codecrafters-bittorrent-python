@@ -18,7 +18,7 @@ class MsgID(IntEnum):
     EXTENSION = 20
 
 
-def encode_message(id: int=None, payload: bytes=b"") -> bytes:
+def encode_message(id: int | None=None, payload: bytes=b"") -> bytes:
     payload_length = len(payload)
     buffer = bytearray(4 + (1 if id else 0) + payload_length)
     buffer[:4] = struct.pack("!I", (1 if id else 0) + payload_length)
@@ -66,6 +66,6 @@ def recv_message(sock: socket.SocketType, buffer: bytes, recv_length: int=1024) 
     return id, payload, buffer
 
 
-def send_message(send_id: int, sock: socket.SocketType, payload: bytes=b""):
+def send_message(send_id: int, sock: socket.SocketType, payload: bytes=b"") -> None:
     print("sending", send_id, MsgID(send_id).name, len(payload), payload)
     sock.send(encode_message(send_id, payload))

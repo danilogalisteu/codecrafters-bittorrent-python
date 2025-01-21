@@ -13,10 +13,10 @@ from .protocol.metainfo import load_metainfo
 from .protocol.peer import Peer, get_peers, print_peers
 
 
-def run_decode(value: str):
+def run_decode(value: str) -> None:
     bencoded_value = value.encode()
 
-    def bytes_to_str(data):
+    def bytes_to_str(data: bytes) -> None:
         if isinstance(data, bytes):
             return data.decode()
 
@@ -25,17 +25,17 @@ def run_decode(value: str):
     print(json.dumps(decode_bencode(bencoded_value)[0], default=bytes_to_str))
 
 
-def run_info(torrent_file: str):
+def run_info(torrent_file: str) -> None:
     _ = load_metainfo(torrent_file, show_info=True)
 
 
-def run_peers(torrent_file: str, peer_id: bytes):
+def run_peers(torrent_file: str, peer_id: bytes) -> None:
     tracker, info_hash, _, file_length, _ = load_metainfo(torrent_file)
     peers = get_peers(tracker, info_hash, file_length, peer_id)
     print_peers(peers)
 
 
-def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes):
+def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes) -> None:
     peer_address = peer_address.split(":")
     peer = peer_address[0], int(peer_address[1])
     info_hash = load_metainfo(torrent_file)[1]
@@ -46,7 +46,7 @@ def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes):
         print(f"Peer ID: {r_peer_id.hex()}")
 
 
-def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, peer_id: bytes):
+def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, peer_id: bytes) -> None:
     tracker, info_hash, pieces_hash, file_length, piece_length = load_metainfo(torrent_file)
 
     if piece_index >= len(pieces_hash) // 20:
@@ -57,7 +57,7 @@ def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, pee
     for address in peers:
         peer = Peer(address, info_hash, peer_id)
         peer.initialize()
-        while not peer._init_bitfield:
+        while not peer.bitfield:
             pass
         peer.initialize_pieces(pieces_hash, file_length, piece_length)
         piece = peer.get_piece(piece_index)
@@ -71,14 +71,14 @@ def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, pee
         print(f"Piece {piece_index} not found in any peer")
 
 
-def run_download(out_file: str, torrent_file: str, peer_id: bytes):
+def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None:
     tracker, info_hash, pieces_hash, file_length, piece_length = load_metainfo(torrent_file)
 
-    def peer_worker(address: tuple[str, int], jobs: queue.Queue, results: queue.Queue):
+    def peer_worker(address: tuple[str, int], jobs: queue.Queue, results: queue.Queue) -> None:
         # print("peer", address, "starting")
         peer = Peer(address, info_hash, peer_id)
         peer.initialize()
-        while not peer._init_bitfield:
+        while not peer.bitfield:
             pass
         peer.initialize_pieces(pieces_hash, file_length, piece_length)
         while True:
@@ -117,13 +117,13 @@ def run_download(out_file: str, torrent_file: str, peer_id: bytes):
                 file.write(piece)
 
 
-def run_magnet_parse(magnet_link: str):
+def run_magnet_parse(magnet_link: str) -> None:
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     print("Tracker URL:", trackers[0])
     print("Info Hash:", info_hash_str)
 
 
-def run_magnet_handshake(magnet_link: str, peer_id: bytes):
+def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
     """
     Test links:
     - magnet1.gif.torrent: magnet:?xt=urn:btih:ad42ce8109f54c99613ce38f9b4d87e70f24a165&dn=magnet1.gif&tr=http%3A%2F%2Fbittorrent-test-tracker.codecrafters.io%2Fannounce
@@ -147,7 +147,7 @@ def run_magnet_handshake(magnet_link: str, peer_id: bytes):
     print("Peer Metadata Extension ID:", peer.extension_support["ut_metadata"])
 
 
-def make_parser(peer_id: bytes):
+def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.main", description="Basic bittorrent client")
     subparsers = parser.add_subparsers(title="command", description="valid commands", required=True)
 
