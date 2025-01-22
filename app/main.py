@@ -180,11 +180,11 @@ async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
     peer_task = peer.run_task()
 
     while not peer.peer_ext_support:
-        await asyncio.sleep(1)
+        await asyncio.sleep(0)
     print("peer_ext_support", peer.peer_ext_support)
 
     while not peer.peer_ext_meta_info:
-        await asyncio.sleep(1)
+        await asyncio.sleep(0)
     print("peer_ext_meta_info", peer.peer_ext_meta_info)
 
     peer_task.cancel()
