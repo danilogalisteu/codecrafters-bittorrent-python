@@ -55,6 +55,10 @@ class Peer:
         self._is_choke = True
         self._is_interested = False
 
+        self.event_handshake = asyncio.Event()
+        self.event_extension = asyncio.Event()
+        self.event_metadata = asyncio.Event()
+        self.event_pieces = asyncio.Event()
         self._init_handshake = False
         self._init_extension = False
         self._init_metadata = False
@@ -87,6 +91,7 @@ class Peer:
                 assert self.info_hash == r_info_hash
                 self._comm_buffer = self._comm_buffer[handshake_len:]
                 self._init_handshake = True
+                self.event_handshake.set()
             except IndexError:
                 pass
 
@@ -97,6 +102,7 @@ class Peer:
             self._send_queue.put((MsgID.EXTENSION, ext_handshake_payload))
         else:
             self._init_extension = True
+            self.event_extension.set()
 
     async def _parse_message(self, recv_id: int, recv_payload: bytes) -> None:
         match recv_id:
@@ -135,6 +141,7 @@ class Peer:
                         meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
                         self._send_queue.put((MsgID.EXTENSION, self.peer_ext_meta_id.to_bytes(1) + meta_dict))
                     self._init_extension = True
+                    self.event_extension.set()
                 # metadata
                 elif self.peer_ext_meta_id and ext_id == self.client_ext_support["m"]["ut_metadata"]:
                     payload_length = len(ext_payload)
@@ -148,6 +155,7 @@ class Peer:
                             self.peer_ext_meta_info["name"],
                         )
                         self._init_metadata = True
+                        self.event_metadata.set()
                 # unexpected
                 else:
                     print("new ext msg id", ext_id, ext_payload)
@@ -215,6 +223,7 @@ class Peer:
         ]
 
         self._init_pieces = True
+        self.event_pieces.set()
 
     def has_piece(self, piece_index: int) -> bool:
         if not self._init_pieces:

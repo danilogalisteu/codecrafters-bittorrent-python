@@ -154,8 +154,7 @@ async def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
     peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
     peer_task = peer.run_task()
 
-    while peer.peer_ext_support is None:
-        await asyncio.sleep(0)
+    await peer.event_extension.wait()
     print("peer_ext_support", peer.peer_ext_support)
 
     peer_task.cancel()
@@ -177,8 +176,7 @@ async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
     peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
     peer_task = peer.run_task()
 
-    while not peer.peer_ext_meta_info:
-        await asyncio.sleep(0)
+    await peer.event_metadata.wait()
     print("peer_ext_meta_info", peer.peer_ext_meta_info)
 
     peer_task.cancel()
@@ -208,9 +206,7 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
         peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
         peer_task = peer.run_task()
 
-        while not peer.peer_ext_meta_info:
-            await asyncio.sleep(0)
-
+        await peer.event_pieces.wait()
         piece = await peer.get_piece(piece_index)
         peer_task.cancel()
         if piece is not None:
@@ -244,8 +240,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -
         peers_task[address] = peers[address].run_task()
 
     for address in addresses:
-        while not peers[address].num_pieces:
-            await asyncio.sleep(0)
+        await peers[address].event_pieces.wait()
 
     num_pieces = peers[addresses[0]].num_pieces
 
