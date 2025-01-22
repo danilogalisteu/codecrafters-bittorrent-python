@@ -34,10 +34,11 @@ class Peer:
         self.peer_ext_meta_id = None
         self.peer_ext_meta_info = None
 
-        self.pieces_hash = None
-        self.num_pieces = None
+        self.file_name = None
         self.file_length = None
         self.piece_length = None
+        self.pieces_hash = None
+        self.num_pieces = None
         self.last_piece_length = None
 
         self._running = False
@@ -125,10 +126,10 @@ class Peer:
                 self._recv_queue.put((index, begin, block))
             case MsgID.EXTENSION:
                 ext_id = recv_payload[0]
-                ext_payload = decode_bencode(recv_payload[1:])[0]
+                ext_payload = recv_payload[1:]
                 # handshake
                 if ext_id == 0:
-                    self.peer_ext_support = ext_payload
+                    self.peer_ext_support = decode_bencode(ext_payload)[0]
                     if "ut_metadata" in self.peer_ext_support["m"]:
                         self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
                         meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
@@ -136,8 +137,18 @@ class Peer:
                     self._init_extension = True
                 # metadata
                 elif self.peer_ext_meta_id and ext_id == self.client_ext_support["m"]["ut_metadata"]:
-                    self.peer_ext_meta_info = ext_payload
-                    self._init_metadata = True
+                    payload_length = len(ext_payload)
+                    peer_meta_dict, payload_counter = decode_bencode(ext_payload)
+                    if peer_meta_dict["msg_type"] == 1:
+                        if payload_counter < payload_length:
+                            self.peer_ext_meta_info, _ = decode_bencode(ext_payload, payload_counter)
+                            await self.initialize_pieces(
+                                self.peer_ext_meta_info["pieces"],
+                                self.peer_ext_meta_info["length"],
+                                self.peer_ext_meta_info["piece length"],
+                                self.peer_ext_meta_info["name"],
+                            )
+                            self._init_metadata = True
                 # unexpected
                 else:
                     print("new ext msg id", ext_id, ext_payload)
@@ -155,7 +166,7 @@ class Peer:
                 # Incomplete message
                 self._comm_buffer += await self._reader.read(self._recv_length)
             else:
-                # print("received", recv_id, MsgID(recv_id).name, len(recv_payload))#, recv_payload)
+                # print("received", recv_id, MsgID(recv_id).name, len(recv_payload), recv_payload)
                 await self._parse_message(recv_id, recv_payload)
 
     async def _comm_send(self) -> None:
@@ -188,10 +199,11 @@ class Peer:
     def abort(self) -> None:
         self._abort = True
 
-    async def initialize_pieces(self, pieces_hash: bytes, file_length: int, piece_length: int) -> None:
+    async def initialize_pieces(self, pieces_hash: bytes, file_length: int, piece_length: int, file_name: str="") -> None:
         while not self.peer_bitfield:
             await asyncio.sleep(0)
 
+        self.file_name = file_name
         self.pieces_hash = pieces_hash
         self.num_pieces = len(self.pieces_hash) // 20
         self.file_length = file_length

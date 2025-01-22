@@ -97,7 +97,7 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
         jobs.put(piece_index)
 
     async def peer_worker(address, piece_index):
-        print("peer", address, "received job", piece_index)
+        # print("peer", address, "received job", piece_index)
         peer = Peer(address, info_hash, peer_id)
         peer_task = peer.run_task()
         await peer.initialize_pieces(pieces_hash, file_length, piece_length)
@@ -105,7 +105,7 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
         peer_task.cancel()
         if piece is not None:
             results.append((piece_index, piece))
-            print("peer", address, "finished job", piece_index)
+            # print("peer", address, "finished job", piece_index)
         workers.put(address)
         tasks[address].cancel()
         del tasks[address]
@@ -193,10 +193,12 @@ async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
     print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
 
     print("Tracker URL:", trackers[0])
-    print("Length:")
+    print("Length:", peer.file_length)
     print("Info Hash:", info_hash_str)
-    print("Piece Length:")
+    print("Piece Length:", peer.piece_length)
     print("Piece Hashes:")
+    for piece_index in range(peer.num_pieces):
+        print(peer.pieces_hash[piece_index*20:piece_index*20+20].hex())
 
 
 def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
