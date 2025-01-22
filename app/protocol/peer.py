@@ -147,7 +147,7 @@ class Peer:
 
     async def _comm_recv(self) -> None:
         while not self._abort:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0)
             # try to parse one message
             try:
                 recv_id, recv_payload, self._comm_buffer = decode_message(self._comm_buffer)
@@ -160,7 +160,7 @@ class Peer:
 
     async def _comm_send(self) -> None:
         while not self._abort:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0)
             # send one message from queue
             if not self._send_queue.empty():
                 send_id, send_payload = self._send_queue.get()
@@ -190,7 +190,7 @@ class Peer:
 
     async def initialize_pieces(self, pieces_hash: bytes, file_length: int, piece_length: int) -> None:
         while not self.peer_bitfield:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0)
 
         self.pieces_hash = pieces_hash
         self.num_pieces = len(self.pieces_hash) // 20
@@ -221,7 +221,7 @@ class Peer:
             self._send_queue.put((MsgID.INTERESTED, b""))
 
         while self._am_choke:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0)
 
         piece_length = self.piece_length if piece_index < self.num_pieces - 1 else self.last_piece_length
         assert piece_length > 0
@@ -235,7 +235,7 @@ class Peer:
             self._send_queue.put((MsgID.REQUEST, struct.pack("!III", piece_index, current_begin, eff_chunk_length)))
 
             while True:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0)
                 if not self._recv_queue.empty():
                     r_index, r_begin, r_block = self._recv_queue.get()
                     if r_index == piece_index and r_begin == current_begin:

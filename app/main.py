@@ -97,7 +97,7 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
         jobs.put(piece_index)
 
     async def peer_worker(address, piece_index):
-        # print("peer", address, "received job", piece_index)
+        print("peer", address, "received job", piece_index)
         peer = Peer(address, info_hash, peer_id)
         peer_task = peer.run_task()
         await peer.initialize_pieces(pieces_hash, file_length, piece_length)
@@ -105,22 +105,21 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
         peer_task.cancel()
         if piece is not None:
             results.append((piece_index, piece))
-            # print("peer", address, "finished job", piece_index)
-            jobs.task_done()
+            print("peer", address, "finished job", piece_index)
         workers.put(address)
         tasks[address].cancel()
         del tasks[address]
 
     while True:
+        if len(results) == num_pieces:
+            break
         if not jobs.empty():
             piece_index = jobs.get()
             while workers.empty():
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0)
             address = workers.get()
             tasks[address] = asyncio.create_task(peer_worker(address, piece_index))
-        if len(results) == num_pieces:
-            break
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0)
 
     pieces = [piece for _, piece in sorted(results, key=lambda item: item[0])]
     missing_pieces = [piece_index for piece_index, piece in enumerate(pieces) if piece is None]
