@@ -105,7 +105,7 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
         peer_task.cancel()
         if piece is not None:
             results.append((piece_index, piece))
-            # print("peer", address, "finished job", piece_index)
+            print("peer", address, "finished job", piece_index)
         workers.put(address)
         tasks[address].cancel()
         del tasks[address]
@@ -157,7 +157,7 @@ async def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
     peer_task = peer.run_task()
 
     while peer.peer_ext_support is None:
-        await asyncio.sleep(1)
+        await asyncio.sleep(0)
     print("peer_ext_support", peer.peer_ext_support)
 
     peer_task.cancel()
