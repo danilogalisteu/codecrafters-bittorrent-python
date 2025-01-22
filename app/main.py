@@ -105,7 +105,7 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
         peer_task.cancel()
         if piece is not None:
             results.append((piece_index, piece))
-            print("peer", address, "finished job", piece_index)
+            # print("peer", address, "finished job", piece_index)
         workers.put(address)
         tasks[address].cancel()
         del tasks[address]
@@ -201,6 +201,38 @@ async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
         print(peer.pieces_hash[piece_index*20:piece_index*20+20].hex())
 
 
+async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, peer_id: bytes) -> None:
+    unknown_length = 1024
+    extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
+    extension_support = {"m": {"ut_metadata": 1}}
+
+    _, trackers, info_hash_str = parse_magnet(magnet_link)
+    info_hash = bytes.fromhex(info_hash_str)
+    peers = get_peers(trackers[0], info_hash, unknown_length, peer_id)
+    address = peers[0]
+
+    for address in peers:
+        peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
+        peer_task = peer.run_task()
+
+        while not peer.peer_ext_support:
+            await asyncio.sleep(0)
+
+        while not peer.peer_ext_meta_info:
+            await asyncio.sleep(0)
+
+        piece = await peer.get_piece(piece_index)
+        peer_task.cancel()
+        if piece is not None:
+            break
+
+    if piece is not None:
+        with pathlib.Path(piece_file).open("wb") as file:
+            file.write(piece)
+    else:
+        print(f"Piece {piece_index} not found in any peer")
+
+
 def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.main", description="Basic bittorrent client")
     subparsers = parser.add_subparsers(title="command", description="valid commands", required=True)
@@ -280,6 +312,16 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
     )
     parser_magnet_info.add_argument("magnet_link", type=str, help="magnet link")
     parser_magnet_info.set_defaults(command_cb=run_magnet_info, peer_id=peer_id)
+
+    parser_magnet_piece = subparsers.add_parser(
+        "magnet_download_piece",
+        description="download piece of file from magnet link",
+        help="download piece of file from magnet link",
+    )
+    parser_magnet_piece.add_argument("-o", type=str, required=True, dest="piece_file", metavar="piece_file", help="path to piece file (will be overwritten)")
+    parser_magnet_piece.add_argument("magnet_link", type=str, help="magnet link")
+    parser_magnet_piece.add_argument("piece_index", type=int, help="index of the piece (starting at 0)")
+    parser_magnet_piece.set_defaults(command_cb=run_magnet_piece, peer_id=peer_id)
 
     return parser
 
