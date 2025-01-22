@@ -155,7 +155,7 @@ class Peer:
                 # Incomplete message
                 self._comm_buffer += await self._reader.read(self._recv_length)
             else:
-                print("received", recv_id, MsgID(recv_id).name, len(recv_payload))#, recv_payload)
+                # print("received", recv_id, MsgID(recv_id).name, len(recv_payload))#, recv_payload)
                 await self._parse_message(recv_id, recv_payload)
 
     async def _comm_send(self) -> None:
@@ -164,7 +164,7 @@ class Peer:
             # send one message from queue
             if not self._send_queue.empty():
                 send_id, send_payload = self._send_queue.get()
-                print("sending", send_id, MsgID(send_id).name, len(send_payload), send_payload)
+                # print("sending", send_id, MsgID(send_id).name, len(send_payload), send_payload)
                 self._writer.write(encode_message(send_id, send_payload))
                 await self._writer.drain()
 
