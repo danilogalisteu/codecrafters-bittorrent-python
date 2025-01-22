@@ -88,16 +88,16 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
     jobs = queue.Queue()
     workers = queue.Queue()
 
-    print("adding workers")
+    # print("adding workers")
     for address in peers:
         workers.put(address)
 
-    print("scheduling jobs")
+    # print("scheduling jobs")
     for piece_index in range(num_pieces):
         jobs.put(piece_index)
 
     async def peer_worker(address, piece_index):
-        print("peer", address, "received job", piece_index)
+        # print("peer", address, "received job", piece_index)
         peer = Peer(address, info_hash, peer_id)
         peer_task = peer.run_task()
         await peer.initialize_pieces(pieces_hash, file_length, piece_length)
@@ -105,7 +105,7 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
         peer_task.cancel()
         if piece is not None:
             results.append((piece_index, piece))
-            print("peer", address, "finished job", piece_index)
+            # print("peer", address, "finished job", piece_index)
             jobs.task_done()
         workers.put(address)
         tasks[address].cancel()
