@@ -6,7 +6,6 @@ import queue
 import secrets
 import socket
 import sys
-import threading
 
 from .protocol.bencode import decode_bencode
 from .protocol.handshake import decode_handshake, encode_handshake
@@ -96,7 +95,7 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
     for piece_index in range(num_pieces):
         jobs.put(piece_index)
 
-    async def peer_worker(address, piece_index):
+    async def peer_worker(address: str, piece_index: int) -> None:
         # print("peer", address, "received job", piece_index)
         peer = Peer(address, info_hash, peer_id)
         peer_task = peer.run_task()
@@ -178,10 +177,6 @@ async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
     peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
     peer_task = peer.run_task()
 
-    while not peer.peer_ext_support:
-        await asyncio.sleep(0)
-    print("peer_ext_support", peer.peer_ext_support)
-
     while not peer.peer_ext_meta_info:
         await asyncio.sleep(0)
     print("peer_ext_meta_info", peer.peer_ext_meta_info)
@@ -262,7 +257,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -
     for piece_index in range(num_pieces):
         jobs.put(piece_index)
 
-    async def peer_worker(address, piece_index):
+    async def peer_worker(address: str, piece_index: int) -> None:
         # print("peer", address, "received job", piece_index)
         peer = peers[address]
         piece = await peer.get_piece(piece_index)

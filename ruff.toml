@@ -9,4 +9,4 @@ select = [
 ]
 
 # 2. Avoid enforcing line-length violations (`E501`)
-ignore = ["E501", "TRY003"]
+ignore = ["E501", "TRY003", "ASYNC230"]

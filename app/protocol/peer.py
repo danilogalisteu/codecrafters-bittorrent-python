@@ -139,16 +139,15 @@ class Peer:
                 elif self.peer_ext_meta_id and ext_id == self.client_ext_support["m"]["ut_metadata"]:
                     payload_length = len(ext_payload)
                     peer_meta_dict, payload_counter = decode_bencode(ext_payload)
-                    if peer_meta_dict["msg_type"] == 1:
-                        if payload_counter < payload_length:
-                            self.peer_ext_meta_info, _ = decode_bencode(ext_payload, payload_counter)
-                            await self.initialize_pieces(
-                                self.peer_ext_meta_info["pieces"],
-                                self.peer_ext_meta_info["length"],
-                                self.peer_ext_meta_info["piece length"],
-                                self.peer_ext_meta_info["name"],
-                            )
-                            self._init_metadata = True
+                    if peer_meta_dict["msg_type"] == 1 and payload_counter < payload_length:
+                        self.peer_ext_meta_info, _ = decode_bencode(ext_payload, payload_counter)
+                        await self.initialize_pieces(
+                            self.peer_ext_meta_info["pieces"],
+                            self.peer_ext_meta_info["length"],
+                            self.peer_ext_meta_info["piece length"],
+                            self.peer_ext_meta_info["name"],
+                        )
+                        self._init_metadata = True
                 # unexpected
                 else:
                     print("new ext msg id", ext_id, ext_payload)
@@ -193,7 +192,7 @@ class Peer:
 
         self._running = False
 
-    def run_task(self):
+    def run_task(self) -> asyncio.Task:
         return asyncio.create_task(self._comm_task())
 
     def abort(self) -> None:
