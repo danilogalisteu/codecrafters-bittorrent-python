@@ -48,6 +48,7 @@ async def connect_udp(address: tuple[str, int]) -> int:
     recv_action, recv_transaction_id, connection_id = struct.unpack("!iiq", recv_data[:16])
     assert recv_transaction_id == transaction_id
     assert recv_action == UDPAction.CONNECT.value
+    assert isinstance(connection_id, int)
     return connection_id
 
 
