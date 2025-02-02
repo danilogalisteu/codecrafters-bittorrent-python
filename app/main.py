@@ -12,7 +12,7 @@ from .protocol.handshake import decode_handshake, encode_handshake
 from .protocol.magnet import parse_magnet
 from .protocol.metainfo import load_metainfo
 from .protocol.peer import Peer
-from .protocol.tracker import get_peers, print_peers
+from .protocol.tracker import Tracker
 
 
 async def run_decode(value: str) -> None:
@@ -32,9 +32,10 @@ async def run_info(torrent_file: str) -> None:
 
 
 async def run_peers(torrent_file: str, peer_id: bytes) -> None:
-    tracker, info_hash, _, file_length, _ = load_metainfo(torrent_file)
-    peers = get_peers(tracker, info_hash, file_length, peer_id)
-    print_peers(peers)
+    url, info_hash, _, file_length, _ = load_metainfo(torrent_file)
+    tracker = Tracker(url, info_hash, file_length, peer_id)
+    _ = await tracker.get_peers()
+    tracker.print_peers()
 
 
 async def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes) -> None:
@@ -53,12 +54,13 @@ async def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes) ->
 
 
 async def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, peer_id: bytes) -> None:
-    tracker, info_hash, pieces_hash, file_length, piece_length = load_metainfo(torrent_file)
+    url, info_hash, pieces_hash, file_length, piece_length = load_metainfo(torrent_file)
 
     if piece_index >= len(pieces_hash) // 20:
         raise IndexError(f"Piece {piece_index} not found in torrent")
 
-    peers = get_peers(tracker, info_hash, file_length, peer_id)
+    tracker = Tracker(url, info_hash, file_length, peer_id)
+    peers = await tracker.get_peers()
 
     for address in peers:
         peer = Peer(address, info_hash, peer_id)
@@ -77,10 +79,11 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
 
 
 async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None:
-    tracker, info_hash, pieces_hash, file_length, piece_length = load_metainfo(torrent_file)
+    url, info_hash, pieces_hash, file_length, piece_length = load_metainfo(torrent_file)
     num_pieces = len(pieces_hash) // 20
 
-    peers = get_peers(tracker, info_hash, file_length, peer_id)
+    tracker = Tracker(url, info_hash, file_length, peer_id)
+    peers = await tracker.get_peers()
 
     worker_task = {}
     results = {}
@@ -148,7 +151,9 @@ async def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
 
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
-    peers = get_peers(trackers[0], info_hash, unknown_length, peer_id)
+
+    tracker = Tracker(trackers[0], info_hash, unknown_length, peer_id)
+    peers = await tracker.get_peers()
     address = peers[0]
 
     peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
@@ -170,7 +175,9 @@ async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
 
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
-    peers = get_peers(trackers[0], info_hash, unknown_length, peer_id)
+
+    tracker = Tracker(trackers[0], info_hash, unknown_length, peer_id)
+    peers = await tracker.get_peers()
     address = peers[0]
 
     peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
@@ -200,7 +207,9 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
 
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
-    peers = get_peers(trackers[0], info_hash, unknown_length, peer_id)
+
+    tracker = Tracker(trackers[0], info_hash, unknown_length, peer_id)
+    peers = await tracker.get_peers()
 
     for address in peers:
         peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
@@ -226,7 +235,9 @@ async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -
 
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
-    addresses = get_peers(trackers[0], info_hash, unknown_length, peer_id)
+
+    tracker = Tracker(trackers[0], info_hash, unknown_length, peer_id)
+    addresses = await tracker.get_peers()
 
     peers = {}
     peers_task = {}
