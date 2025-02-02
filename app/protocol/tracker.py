@@ -5,6 +5,17 @@ from .bencode import decode_bencode
 from .udp import announce_udp, connect_udp
 
 
+def peer_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
+    pos = 0
+    peers = []
+    while pos < len(peers_bytes):
+        peer_ip = ".".join(map(str, peers_bytes[pos:pos+4]))
+        peer_port = int.from_bytes(peers_bytes[pos+4:pos+6], "big")
+        peers.append((peer_ip, peer_port))
+        pos += 6
+    return peers
+
+
 class Tracker:
     def __init__(self, url: str, info_hash: bytes, file_length: int, client_id: bytes) -> None:
         self.url = url
@@ -37,12 +48,7 @@ class Tracker:
         self.peers = []
         if isinstance(res, dict):
             if "peers" in res:
-                pos = 0
-                while pos < len(res["peers"]):
-                    peer_ip = ".".join(map(str, res["peers"][pos:pos+4]))
-                    peer_port = int.from_bytes(res["peers"][pos+4:pos+6], "big")
-                    self.peers.append((peer_ip, peer_port))
-                    pos += 6
+                self.peers = peer_list_from_bytes(res["peers"])
             else:
                 raise ValueError(f"invalid tracker response, missing 'peers':\n{res}")
         else:
@@ -53,14 +59,7 @@ class Tracker:
         tracker_address = url_info.netloc.split(":")
         connection_id = await connect_udp(tracker_address)
         self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(tracker_address, connection_id, self.info_hash, self.client_id, self.port, 0, self.file_length, 0)
-
-        pos = 0
-        self.peers = []
-        while pos < len(peers_bytes):
-            peer_ip = ".".join(map(str, peers_bytes[pos:pos+4]))
-            peer_port = int.from_bytes(peers_bytes[pos+4:pos+6], "big")
-            self.peers.append((peer_ip, peer_port))
-            pos += 6
+        self.peers = peer_list_from_bytes(peers_bytes)
 
     async def get_peers(self) -> list[tuple[str, int]]:
         if self.url.startswith("http"):
