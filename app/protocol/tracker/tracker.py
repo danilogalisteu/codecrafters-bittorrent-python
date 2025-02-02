@@ -1,5 +1,5 @@
+from typing import Any
 import urllib.parse
-import urllib.request
 
 import aiohttp
 
@@ -48,10 +48,12 @@ class Tracker:
             "compact": 1,
         }
         url = self.url + "?" + urllib.parse.urlencode(query)
-        res = None
+        res: dict[str | bytes, Any] | None = None
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
-                res, _ = decode_bencode(await response.read())
+                data, _ = decode_bencode(await response.read())
+                assert isinstance(data, dict)
+                res = data
 
         self.peers = []
         if isinstance(res, dict):
