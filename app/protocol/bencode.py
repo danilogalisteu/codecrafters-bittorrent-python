@@ -1,4 +1,7 @@
-def encode_bencode(value: str | bytes | int | list | dict) -> bytes:
+from typing import Any
+
+
+def encode_bencode(value: str | bytes | int | list[Any] | dict[str | bytes, Any]) -> bytes:
     if isinstance(value, str):
         value_array = value.encode()
         return f"{len(value_array)}:".encode() + value_array
@@ -40,7 +43,7 @@ def decode_int(value: bytes, pos: int) -> tuple[int, int]:
     return int(value[pos+1:end]), end + 1
 
 
-def decode_bencode(value: bytes, pos: int=0) -> tuple[str, int] | tuple[bytes, int] | tuple[int, int] | tuple[list, int] | tuple[dict, int]:
+def decode_bencode(value: bytes, pos: int=0) -> tuple[str, int] | tuple[bytes, int] | tuple[int, int] | tuple[list[Any], int] | tuple[dict[str | bytes, Any], int]:
     if chr(value[pos]).isdigit():
         return decode_str(value, pos)
     if chr(value[pos]) == "i":
@@ -60,4 +63,4 @@ def decode_bencode(value: bytes, pos: int=0) -> tuple[str, int] | tuple[bytes, i
             res_val, pos = decode_bencode(value, pos)
             res_dict[res_key] = res_val
         return res_dict, pos + 1
-    raise NotImplementedError(f"decode_bencode: invalid value {value}")
+    raise NotImplementedError(f"decode_bencode: invalid value {value!r}")
