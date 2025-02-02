@@ -33,7 +33,7 @@ class UDPEvent(enum.IntEnum):
 
 
 async def connect_udp(address: tuple[str, int]) -> int:
-    transaction_id = random.randrange(2**32)
+    transaction_id = random.randrange(-2**31, 2**31)
     send_data = struct.pack(
         "!qii",
         UDP_TRACKER_PROTOCOL_ID,
@@ -62,7 +62,7 @@ async def announce_udp(
         uploaded: int,
         client_key: int=0,
     ) -> tuple[int, int, int, bytes]:
-    transaction_id = random.randrange(2**32)
+    transaction_id = random.randrange(-2**31, 2**31)
     send_data = struct.pack("!qii", connection_id, UDPAction.ANNOUNCE.value, transaction_id)
     send_data += info_hash
     send_data += client_id
