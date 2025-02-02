@@ -6,7 +6,9 @@ import queue
 import secrets
 import socket
 import sys
+from typing import Any
 
+from .protocol import address_str_to_tuple
 from .protocol.bencode import decode_bencode
 from .protocol.handshake import decode_handshake, encode_handshake
 from .protocol.magnet import parse_magnet
@@ -18,10 +20,9 @@ from .protocol.tracker import Tracker
 async def run_decode(value: str) -> None:
     bencoded_value = value.encode()
 
-    def bytes_to_str(data: bytes) -> None:
+    def bytes_to_str(data: bytes) -> str:
         if isinstance(data, bytes):
             return data.decode()
-
         raise TypeError(f"Type not serializable: {type(data)}")
 
     print(json.dumps(decode_bencode(bencoded_value)[0], default=bytes_to_str))
@@ -32,16 +33,19 @@ async def run_info(torrent_file: str) -> None:
 
 
 async def run_peers(torrent_file: str, peer_id: bytes) -> None:
-    url, info_hash, _, file_length, _ = load_metainfo(torrent_file)
+    infodata = load_metainfo(torrent_file)
+    assert infodata is not None
+    url, info_hash, _, file_length, _ = infodata
     tracker = Tracker(url, info_hash, file_length, peer_id)
     _ = await tracker.get_peers()
     tracker.print_peers()
 
 
 async def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes) -> None:
-    peer_address = peer_address.split(":")
-    peer = peer_address[0], int(peer_address[1])
-    info_hash = load_metainfo(torrent_file)[1]
+    peer = address_str_to_tuple(peer_address)
+    infodata = load_metainfo(torrent_file)
+    assert infodata is not None
+    info_hash = infodata[1]
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect(peer)
@@ -54,7 +58,9 @@ async def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes) ->
 
 
 async def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, peer_id: bytes) -> None:
-    url, info_hash, pieces_hash, file_length, piece_length = load_metainfo(torrent_file)
+    infodata = load_metainfo(torrent_file)
+    assert infodata is not None
+    url, info_hash, pieces_hash, file_length, piece_length = infodata
 
     if piece_index >= len(pieces_hash) // 20:
         raise IndexError(f"Piece {piece_index} not found in torrent")
@@ -79,16 +85,18 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
 
 
 async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None:
-    url, info_hash, pieces_hash, file_length, piece_length = load_metainfo(torrent_file)
+    infodata = load_metainfo(torrent_file)
+    assert infodata is not None
+    url, info_hash, pieces_hash, file_length, piece_length = infodata
     num_pieces = len(pieces_hash) // 20
 
     tracker = Tracker(url, info_hash, file_length, peer_id)
     peers = await tracker.get_peers()
 
-    worker_task = {}
-    results = {}
-    jobs = queue.Queue()
-    workers = queue.Queue()
+    worker_task:dict[tuple[str, int], asyncio.Task[None]] = {}
+    results: dict[int, bytes] = {}
+    jobs: queue.Queue[int] = queue.Queue()
+    workers: queue.Queue[tuple[str, int]] = queue.Queue()
 
     # print("adding workers")
     for address in peers:
@@ -98,7 +106,7 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
     for piece_index in range(num_pieces):
         jobs.put(piece_index)
 
-    async def peer_worker(address: str, piece_index: int) -> None:
+    async def peer_worker(address: tuple[str, int], piece_index: int) -> None:
         # print("peer", address, "received job", piece_index)
         peer = Peer(address, info_hash, peer_id)
         peer_task = peer.run_task()
@@ -125,7 +133,7 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
 
     missing_pieces = [piece_index for piece_index in range(num_pieces) if piece_index not in results]
     if missing_pieces:
-        print("Some pieces are missing:", ", ".join(missing_pieces))
+        print("Some pieces are missing:", ", ".join(map(str, missing_pieces)))
     else:
         with pathlib.Path(out_file).open("wb") as file:
             for piece_index in sorted(results):
@@ -147,7 +155,7 @@ async def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
     """
     unknown_length = 1024
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
-    extension_support = {"m": {"ut_metadata": 1}}
+    extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
@@ -164,6 +172,8 @@ async def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
 
     peer_task.cancel()
 
+    assert peer.peer_id is not None
+    assert peer.peer_ext_support is not None
     print(f"Peer ID: {peer.peer_id.hex()}")
     print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
 
@@ -171,7 +181,7 @@ async def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
 async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
     unknown_length = 1024
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
-    extension_support = {"m": {"ut_metadata": 1}}
+    extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
@@ -188,9 +198,15 @@ async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
 
     peer_task.cancel()
 
+    assert peer.peer_id is not None
+    assert peer.peer_ext_support is not None
     print("Peer ID:", peer.peer_id.hex())
     print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
 
+    assert peer.pieces_hash is not None
+    assert peer.file_length is not None
+    assert peer.piece_length is not None
+    assert peer.num_pieces is not None
     print("Tracker URL:", trackers[0])
     print("Length:", peer.file_length)
     print("Info Hash:", info_hash_str)
@@ -203,7 +219,7 @@ async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
 async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, peer_id: bytes) -> None:
     unknown_length = 1024
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
-    extension_support = {"m": {"ut_metadata": 1}}
+    extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
@@ -231,7 +247,7 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
 async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -> None:
     unknown_length = 1024
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
-    extension_support = {"m": {"ut_metadata": 1}}
+    extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
@@ -241,10 +257,10 @@ async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -
 
     peers = {}
     peers_task = {}
-    worker_task = {}
-    results = {}
-    jobs = queue.Queue()
-    workers = queue.Queue()
+    worker_task:dict[tuple[str, int], asyncio.Task[None]] = {}
+    results: dict[int, bytes] = {}
+    jobs: queue.Queue[int] = queue.Queue()
+    workers: queue.Queue[tuple[str, int]] = queue.Queue()
 
     for address in addresses:
         peers[address] = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
@@ -254,6 +270,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -
         await peers[address].event_pieces.wait()
 
     num_pieces = peers[addresses[0]].num_pieces
+    assert num_pieces is not None
 
     # print("adding workers")
     for address in peers:
@@ -263,7 +280,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -
     for piece_index in range(num_pieces):
         jobs.put(piece_index)
 
-    async def peer_worker(address: str, piece_index: int) -> None:
+    async def peer_worker(address: tuple[str, int], piece_index: int) -> None:
         # print("peer", address, "received job", piece_index)
         peer = peers[address]
         piece = await peer.get_piece(piece_index)
@@ -290,7 +307,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -
 
     missing_pieces = [piece_index for piece_index in range(num_pieces) if piece_index not in results]
     if missing_pieces:
-        print("Some pieces are missing:", ", ".join(missing_pieces))
+        print("Some pieces are missing:", ", ".join(map(str, missing_pieces)))
     else:
         with pathlib.Path(out_file).open("wb") as file:
             for piece_index in sorted(results):
@@ -406,9 +423,8 @@ def main() -> None:
     parser = make_parser(peer_id)
     args = parser.parse_args(sys.argv[1:])
     command_cb = args.command_cb
-    args = {k:v for k, v in vars(args).items() if k != "command_cb"}
 
-    asyncio.run(command_cb(**args))
+    asyncio.run(command_cb(**{k:v for k, v in vars(args).items() if k != "command_cb"}))
 
 
 if __name__ == "__main__":
