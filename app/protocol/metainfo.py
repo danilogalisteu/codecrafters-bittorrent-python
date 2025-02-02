@@ -4,9 +4,10 @@ import pathlib
 from .bencode import decode_bencode, encode_bencode
 
 
-def load_metainfo(file_name: str, show_info: bool=False) -> tuple[dict, str, bytes, bytes, int, int] | None:
+def load_metainfo(file_name: str, show_info: bool=False) -> tuple[str, bytes, bytes, int, int] | None:
     with pathlib.Path(file_name).open("rb") as file:
         metainfo, _ = decode_bencode(file.read())
+        assert isinstance(metainfo, dict)
         tracker = metainfo["announce"]
         info_hash = hashlib.sha1(encode_bencode(metainfo["info"])).digest()
         pieces_hash = metainfo["info"]["pieces"]
