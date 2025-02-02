@@ -2,6 +2,7 @@ import urllib.parse
 import urllib.request
 
 from .bencode import decode_bencode
+from .udp import announce_udp, connect_udp
 
 
 class Tracker:
@@ -12,12 +13,15 @@ class Tracker:
         self.client_id = client_id
         self.port: int = 6881
         self.peers: list[tuple[str, int]] | None = None
+        self.interval = None
+        self.leechers = None
+        self.seeders = None
 
     def print_peers(self) -> None:
         for peer in self.peers:
             print(f"{peer[0]}:{peer[1]}")
 
-    async def _get_peers_tcp(self):
+    async def _get_peers_tcp(self) -> None:
         query = {
             "info_hash": self.info_hash,
             "peer_id": self.client_id,
@@ -42,20 +46,29 @@ class Tracker:
             else:
                 raise ValueError(f"invalid tracker response, missing 'peers':\n{res}")
         else:
-            raise ValueError(f"unhandled tracker response:\n{res}")
+            raise TypeError(f"unhandled tracker response:\n{res}")
 
-    async def _get_peers_udp(self):
+    async def _get_peers_udp(self) -> None:
         url_info = urllib.parse.urlparse(self.url)
-        print("url_info", url_info)
-        print("UDP tracker", url_info.netloc)
-        ...
+        tracker_address = url_info.netloc.split(":")
+        connection_id = await connect_udp(tracker_address)
+        self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(tracker_address, connection_id, self.info_hash, self.client_id, self.port, 0, self.file_length, 0)
 
-    async def get_peers(self):
+        pos = 0
+        self.peers = []
+        while pos < len(peers_bytes):
+            peer_ip = ".".join(map(str, peers_bytes[pos:pos+4]))
+            peer_port = int.from_bytes(peers_bytes[pos+4:pos+6], "big")
+            self.peers.append((peer_ip, peer_port))
+            pos += 6
+
+    async def get_peers(self) -> list[tuple[str, int]]:
         if self.url.startswith("http"):
             await self._get_peers_tcp()
             return self.peers
-        elif self.url.startswith("udp"):
+
+        if self.url.startswith("udp"):
             await self._get_peers_udp()
             return self.peers
-        else:
-            raise ValueError(f"unknown tracker protocol {self.url}")
+
+        raise ValueError(f"unknown tracker protocol {self.url}")
