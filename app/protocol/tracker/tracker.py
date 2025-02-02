@@ -1,6 +1,8 @@
 import urllib.parse
 import urllib.request
 
+import aiohttp
+
 from .. import address_str_to_tuple
 from ..bencode import decode_bencode
 from .messages import announce_udp, connect_udp
@@ -46,7 +48,10 @@ class Tracker:
             "compact": 1,
         }
         url = self.url + "?" + urllib.parse.urlencode(query)
-        res, _ = decode_bencode(urllib.request.urlopen(url).read())
+        res = None
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                res, _ = decode_bencode(await response.read())
 
         self.peers = []
         if isinstance(res, dict):
