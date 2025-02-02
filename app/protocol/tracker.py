@@ -23,6 +23,7 @@ class Tracker:
         self.file_length = file_length
         self.client_id = client_id
         self.port: int = 6881
+        self.connection_id = None
         self.peers: list[tuple[str, int]] | None = None
         self.interval = None
         self.leechers = None
@@ -57,7 +58,7 @@ class Tracker:
     async def _get_peers_udp(self) -> None:
         url_info = urllib.parse.urlparse(self.url)
         tracker_address = url_info.netloc.split(":")
-        connection_id = await connect_udp(tracker_address)
+        self.connection_id = await connect_udp(tracker_address)
         self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(tracker_address, connection_id, self.info_hash, self.client_id, self.port, 0, self.file_length, 0)
         self.peers = peer_list_from_bytes(peers_bytes)
 
