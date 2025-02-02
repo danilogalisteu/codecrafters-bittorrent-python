@@ -1,6 +1,7 @@
 import urllib.parse
 import urllib.request
 
+from .. import address_str_to_tuple
 from ..bencode import decode_bencode
 from .messages import announce_udp, connect_udp
 
@@ -23,13 +24,14 @@ class Tracker:
         self.file_length = file_length
         self.client_id = client_id
         self.port: int = 6881
-        self.connection_id = None
+        self.connection_id: int | None = None
         self.peers: list[tuple[str, int]] | None = None
-        self.interval = None
-        self.leechers = None
-        self.seeders = None
+        self.interval: int | None = None
+        self.leechers: int | None = None
+        self.seeders: int | None = None
 
     def print_peers(self) -> None:
+        assert self.peers is not None
         for peer in self.peers:
             print(f"{peer[0]}:{peer[1]}")
 
@@ -53,11 +55,11 @@ class Tracker:
             else:
                 raise ValueError(f"invalid tracker response, missing 'peers':\n{res}")
         else:
-            raise TypeError(f"unhandled tracker response:\n{res}")
+            raise TypeError(f"unhandled tracker response:\n{res!r}")
 
     async def _get_peers_udp(self) -> None:
         url_info = urllib.parse.urlparse(self.url)
-        tracker_address = url_info.netloc.split(":")
+        tracker_address = address_str_to_tuple(url_info.netloc)
         self.connection_id = await connect_udp(tracker_address)
         self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(tracker_address, self.connection_id, self.info_hash, self.client_id, self.port, 0, self.file_length, 0)
         self.peers = peer_list_from_bytes(peers_bytes)
@@ -65,10 +67,10 @@ class Tracker:
     async def get_peers(self) -> list[tuple[str, int]]:
         if self.url.startswith("http"):
             await self._get_peers_tcp()
-            return self.peers
+            return self.peers or []
 
         if self.url.startswith("udp"):
             await self._get_peers_udp()
-            return self.peers
+            return self.peers or []
 
         raise ValueError(f"unknown tracker protocol {self.url}")
