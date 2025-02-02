@@ -1,0 +1,9 @@
+[project]
+name = "codecrafters-bittorrent-python"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp[speedups]>=3.11.11",
+]
