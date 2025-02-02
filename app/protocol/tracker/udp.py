@@ -1,14 +1,14 @@
 import asyncio
 
 
-class UDPSender:
+class UDPSender(asyncio.DatagramProtocol):
     def __init__(self, data: bytes, on_con_lost: asyncio.Future[bool]) -> None:
         self.send_data = data
         self.on_con_lost = on_con_lost
         self.recv_data: bytes | None = None
         self.transport: asyncio.DatagramTransport | None = None
 
-    def connection_made(self, transport: asyncio.DatagramTransport) -> None:
+    def connection_made(self, transport: asyncio.DatagramTransport) -> None: # type: ignore[override]
         self.transport = transport
         self.transport.sendto(self.send_data)
 
@@ -17,7 +17,7 @@ class UDPSender:
         assert self.transport is not None
         self.transport.close()
 
-    def error_received(self, exc: OSError) -> None:
+    def error_received(self, exc: OSError) -> None: # type: ignore[override]
         print("Error received:", exc)
 
     def connection_lost(self, exc: Exception | None) -> None:
