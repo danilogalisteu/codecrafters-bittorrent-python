@@ -12,6 +12,13 @@ class UDPAction(enum.IntEnum):
     ANNOUNCE = 1
 
 
+class UDPEvent(enum.IntEnum):
+    NONE = 0
+    COMPLETED = 1
+    STARTED = 2
+    STOPPED = 3
+
+
 class UDPSender:
     def __init__(self, data: bytes, on_con_lost) -> None:
         self.send_data = data
@@ -67,3 +74,29 @@ async def connect_udp(address: tuple[str, int]) -> int:
     assert recv_transaction_id == transaction_id
     assert recv_action == UDPAction.CONNECT.value
     return connection_id
+
+
+async def announce_udp(
+        address: tuple[str, int],
+        connection_id: int,
+        info_hash: bytes,
+        client_id: bytes,
+        client_port: int,
+        downloaded: int,
+        left: int,
+        uploaded: int,
+    ) -> tuple[int, int, int, bytes]:
+    transaction_id = random.randrange(2**32)
+    send_data = struct.pack("!QII", connection_id, UDPAction.ANNOUNCE.value, transaction_id)
+    send_data += info_hash
+    send_data += client_id
+    send_data += struct.pack("!QQQIIIiH", downloaded, left, uploaded, UDPEvent.NONE.value, 0, 0, -1, client_port)
+    recv_data = await send_recv_udp_data(
+        (address[0], int(address[1])),
+        send_data,
+    )
+    assert len(recv_data) >= 20
+    recv_action, recv_transaction_id, interval, leechers, seeders = struct.unpack("!IIIII", recv_data[:20])
+    assert recv_transaction_id == transaction_id
+    assert recv_action == UDPAction.ANNOUNCE.value
+    return interval, leechers, seeders, recv_data[20:]
