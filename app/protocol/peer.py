@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import queue
 import struct
+from typing import Any
 
 from .bencode import decode_bencode, encode_bencode
 from .handshake import decode_handshake, encode_handshake
@@ -15,54 +16,54 @@ class Peer:
         info_hash: bytes,
         client_id: bytes,
         client_reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00",
-        client_ext_support: dict | None=None,
+        client_ext_support: dict[str | bytes, Any] | None=None,
     ) -> None:
         self.address = address
         self.info_hash = info_hash
         self.client_id = client_id
         self.client_reserved = client_reserved
-        self.client_bitfield = None
+        self.client_bitfield: bytes | None = None
         self.client_ext_support = client_ext_support
 
         # handshake
-        self.peer_id = None
-        self.peer_reserved = None
-        self.peer_bitfield = None
+        self.peer_id: bytes | None = None
+        self.peer_reserved: bytes | None = None
+        self.peer_bitfield: bytes | None = None
 
-        self.peer_supports_extension = None
-        self.peer_ext_support = None
+        self.peer_supports_extension: bool | None = None
+        self.peer_ext_support: dict[str | bytes, Any] | None = None
         self.peer_ext_meta_id = None
         self.peer_ext_meta_info = None
 
-        self.file_name = None
-        self.file_length = None
-        self.piece_length = None
-        self.pieces_hash = None
-        self.num_pieces = None
-        self.last_piece_length = None
+        self.file_name: str | None = None
+        self.file_length: int | None = None
+        self.piece_length: int | None = None
+        self.pieces_hash: bytes | None = None
+        self.num_pieces: int | None = None
+        self.last_piece_length: int | None = None
 
-        self._running = False
-        self._abort = False
-        self._reader = None
-        self._writer = None
-        self._comm_buffer = b""
-        self._recv_length = 1024
-        self._send_queue = queue.Queue()
-        self._recv_queue = queue.Queue()
+        self._running: bool = False
+        self._abort: bool = False
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
+        self._comm_buffer: bytes = b""
+        self._recv_length: int = 1024
+        self._send_queue: queue.Queue[tuple[MsgID, bytes]] = queue.Queue()
+        self._recv_queue: queue.Queue[tuple[int, int, bytes]] = queue.Queue()
 
-        self._am_choke = True
-        self._am_interested = False
-        self._is_choke = True
-        self._is_interested = False
+        self._am_choke: bool = True
+        self._am_interested: bool = False
+        self._is_choke: bool = True
+        self._is_interested: bool = False
 
         self.event_handshake = asyncio.Event()
         self.event_extension = asyncio.Event()
         self.event_metadata = asyncio.Event()
         self.event_pieces = asyncio.Event()
-        self._init_handshake = False
-        self._init_extension = False
-        self._init_metadata = False
-        self._init_pieces = False
+        self._init_handshake: bool = False
+        self._init_extension: bool = False
+        self._init_metadata: bool = False
+        self._init_pieces: bool = False
 
     def _client_has_piece(self, piece_index: int) -> bool:
         if self.client_bitfield is None:
@@ -72,11 +73,14 @@ class Peer:
         return (self.client_bitfield[bitfield_index] & byte_mask) != 0
 
     def _peer_has_piece(self, piece_index: int) -> bool:
+        assert self.peer_bitfield is not None
         bitfield_index = piece_index // 8
         byte_mask = 1 << (7 - piece_index % 8)
         return (self.peer_bitfield[bitfield_index] & byte_mask) != 0
 
     async def _handshake(self) -> None:
+        assert self._reader is not None
+        assert self._writer is not None
         pstr = b"BitTorrent protocol"
         handshake_len = len(pstr) + 1 + 8 + 20 + 20
 
@@ -96,6 +100,7 @@ class Peer:
                 pass
 
     async def _ext_handshake(self) -> None:
+        assert self.peer_reserved is not None
         self.supports_extension = ((self.peer_reserved[5] >> 4) & 1) == 1
         if self.supports_extension and self.client_ext_support:
             ext_handshake_payload = b"\x00" + encode_bencode(self.client_ext_support)
@@ -135,9 +140,12 @@ class Peer:
                 ext_payload = recv_payload[1:]
                 # handshake
                 if ext_id == 0:
-                    self.peer_ext_support = decode_bencode(ext_payload)[0]
+                    payload = decode_bencode(ext_payload)[0]
+                    assert isinstance(payload, dict)
+                    self.peer_ext_support = payload
                     if "ut_metadata" in self.peer_ext_support["m"]:
                         self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
+                        assert self.peer_ext_meta_id is not None
                         meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
                         self._send_queue.put((MsgID.EXTENSION, self.peer_ext_meta_id.to_bytes(1) + meta_dict))
                     self._init_extension = True
@@ -164,6 +172,7 @@ class Peer:
                 print("received unexpected", recv_id, MsgID(recv_id).name, len(recv_payload), recv_payload)
 
     async def _comm_recv(self) -> None:
+        assert self._reader is not None
         while not self._abort:
             await asyncio.sleep(0)
             # try to parse one message
@@ -177,6 +186,7 @@ class Peer:
                 await self._parse_message(recv_id, recv_payload)
 
     async def _comm_send(self) -> None:
+        assert self._writer is not None
         while not self._abort:
             await asyncio.sleep(0)
             # send one message from queue
@@ -200,14 +210,14 @@ class Peer:
 
         self._running = False
 
-    def run_task(self) -> asyncio.Task:
+    def run_task(self) -> asyncio.Task[None]:
         return asyncio.create_task(self._comm_task())
 
     def abort(self) -> None:
         self._abort = True
 
     async def initialize_pieces(self, pieces_hash: bytes, file_length: int, piece_length: int, file_name: str="") -> None:
-        while not self.peer_bitfield:
+        while self.peer_bitfield is None:
             await asyncio.sleep(0)
 
         self.file_name = file_name
@@ -226,6 +236,7 @@ class Peer:
         self.event_pieces.set()
 
     def has_piece(self, piece_index: int) -> bool:
+        assert self.num_pieces is not None
         if not self._init_pieces:
             raise ValueError("pieces info not initialized")
         if piece_index < 0 or piece_index >= self.num_pieces:
@@ -233,6 +244,11 @@ class Peer:
         return piece_index in self.peer_pieces
 
     async def get_piece(self, piece_index: int) -> bytes | None:
+        assert self.pieces_hash is not None
+        assert self.num_pieces is not None
+        assert self.piece_length is not None
+        assert self.last_piece_length is not None
+
         if not self.has_piece(piece_index):
             return None
 
