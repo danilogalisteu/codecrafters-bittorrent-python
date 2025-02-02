@@ -28,7 +28,7 @@ def encode_message(send_id: int | None=None, payload: bytes=b"") -> bytes:
     return buffer
 
 
-def decode_message(buffer: bytes) -> tuple[int, bytes]:
+def decode_message(buffer: bytes) -> tuple[int, bytes, bytes]:
     len_buffer = len(buffer)
 
     if len_buffer < 4:
