@@ -1,4 +1,15 @@
 import asyncio
+import enum
+import random
+import struct
+
+
+UDP_TRACKER_PROTOCOL_ID = int("0x41727101980", 16)
+
+
+class UDPAction(enum.IntEnum):
+    CONNECT = 0
+    ANNOUNCE = 1
 
 
 class UDPSender:
@@ -37,3 +48,22 @@ async def send_recv_udp_data(address: tuple[str, int], send_data: bytes) -> byte
         transport.close()
     assert len(udp_sender.recv_data) >= 16
     return udp_sender.recv_data
+
+
+async def connect_udp(address: tuple[str, int]) -> int:
+    transaction_id = random.randrange(2**32)
+    send_data = struct.pack(
+        "!QII",
+        UDP_TRACKER_PROTOCOL_ID,
+        UDPAction.CONNECT.value,
+        transaction_id
+    )
+    recv_data = await send_recv_udp_data(
+        (address[0], int(address[1])),
+        send_data,
+    )
+    assert len(recv_data) >= 16
+    recv_action, recv_transaction_id, connection_id = struct.unpack("!IIQ", recv_data[:16])
+    assert recv_transaction_id == transaction_id
+    assert recv_action == UDPAction.CONNECT.value
+    return connection_id
