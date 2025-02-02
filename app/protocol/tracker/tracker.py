@@ -1,8 +1,8 @@
 import urllib.parse
 import urllib.request
 
-from .bencode import decode_bencode
-from .udp import announce_udp, connect_udp
+from ..bencode import decode_bencode
+from .messages import announce_udp, connect_udp
 
 
 def peer_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
@@ -59,7 +59,7 @@ class Tracker:
         url_info = urllib.parse.urlparse(self.url)
         tracker_address = url_info.netloc.split(":")
         self.connection_id = await connect_udp(tracker_address)
-        self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(tracker_address, connection_id, self.info_hash, self.client_id, self.port, 0, self.file_length, 0)
+        self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(tracker_address, self.connection_id, self.info_hash, self.client_id, self.port, 0, self.file_length, 0)
         self.peers = peer_list_from_bytes(peers_bytes)
 
     async def get_peers(self) -> list[tuple[str, int]]:

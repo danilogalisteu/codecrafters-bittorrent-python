@@ -1,7 +1,18 @@
-import asyncio
+"""
+UDP Tracker Protocol for BitTorrent
+https://www.bittorrent.org/beps/bep_0015.html
+
+UDP Tracker Protocol Extensions
+https://bittorrent.org/beps/bep_0041.html
+
+Bittorrent UDP-tracker protocol extension (for types)
+https://www.rasterbar.com/products/libtorrent/udp_tracker_protocol.html
+"""
 import enum
 import random
 import struct
+
+from .udp import send_recv_udp_data
 
 
 UDP_TRACKER_PROTOCOL_ID = int("0x41727101980", 16)
@@ -10,6 +21,8 @@ UDP_TRACKER_PROTOCOL_ID = int("0x41727101980", 16)
 class UDPAction(enum.IntEnum):
     CONNECT = 0
     ANNOUNCE = 1
+    SCRAPE = 2
+    ERROR = 3
 
 
 class UDPEvent(enum.IntEnum):
@@ -17,44 +30,6 @@ class UDPEvent(enum.IntEnum):
     COMPLETED = 1
     STARTED = 2
     STOPPED = 3
-
-
-class UDPSender:
-    def __init__(self, data: bytes, on_con_lost) -> None:
-        self.send_data = data
-        self.on_con_lost = on_con_lost
-        self.recv_data = None
-        self.transport = None
-
-    def connection_made(self, transport) -> None:
-        self.transport = transport
-        self.transport.sendto(self.send_data)
-
-    def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
-        self.recv_data = data
-        self.transport.close()
-
-    def error_received(self, exc: OSError) -> None:
-        print("Error received:", exc)
-
-    def connection_lost(self, exc: Exception | None) -> None:
-        self.on_con_lost.set_result(True)
-
-
-async def send_recv_udp_data(address: tuple[str, int], send_data: bytes) -> bytes:
-    loop = asyncio.get_running_loop()
-    on_con_lost = loop.create_future()
-    udp_sender = UDPSender(send_data, on_con_lost)
-    transport, protocol = await loop.create_datagram_endpoint(
-        lambda: udp_sender,
-        remote_addr=address,
-    )
-    try:
-        await on_con_lost
-    finally:
-        transport.close()
-    assert len(udp_sender.recv_data) >= 16
-    return udp_sender.recv_data
 
 
 async def connect_udp(address: tuple[str, int]) -> int:
