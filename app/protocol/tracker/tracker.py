@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Self
 import urllib.parse
 
 import aiohttp
@@ -39,7 +39,7 @@ class Tracker:
         self.piece_length: int | None = None
 
     @classmethod
-    def from_torrent(cls, torrent_file: str, client_id: bytes):
+    def from_torrent(cls, torrent_file: str, client_id: bytes) -> Self:
         infodata = load_metainfo(torrent_file)
         assert infodata is not None
         url, info_hash, pieces_hash, file_name, file_length, piece_length = infodata
@@ -50,7 +50,7 @@ class Tracker:
         return tracker
 
     @classmethod
-    def from_magnet(cls, magnet_link: str, client_id: bytes, unknown_length: int=1024):
+    def from_magnet(cls, magnet_link: str, client_id: bytes, unknown_length: int=1024) -> list[Self]:
         _, tracker_urls, info_hash_str = parse_magnet(magnet_link)
         info_hash = bytes.fromhex(info_hash_str)
         return [
