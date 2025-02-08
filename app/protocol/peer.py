@@ -51,19 +51,16 @@ class Peer:
         self._send_queue: queue.Queue[tuple[MsgID, bytes]] = queue.Queue()
         self._recv_queue: queue.Queue[tuple[int, int, bytes]] = queue.Queue()
 
-        self._am_choke: bool = True
-        self._am_interested: bool = False
-        self._is_choke: bool = True
-        self._is_interested: bool = False
+        self.event_am_interested = asyncio.Event()
+        self.event_am_unchoke = asyncio.Event()
+        self.event_is_interested = asyncio.Event()
+        self.event_is_unchoke = asyncio.Event()
 
         self.event_handshake = asyncio.Event()
         self.event_extension = asyncio.Event()
+        self.event_bitfield = asyncio.Event()
         self.event_metadata = asyncio.Event()
         self.event_pieces = asyncio.Event()
-        self._init_handshake: bool = False
-        self._init_extension: bool = False
-        self._init_metadata: bool = False
-        self._init_pieces: bool = False
 
     def _client_has_piece(self, piece_index: int) -> bool:
         if self.client_bitfield is None:
@@ -87,14 +84,13 @@ class Peer:
         self._writer.write(encode_handshake(pstr, self.info_hash, self.client_id, self.client_reserved))
         await self._writer.drain()
 
-        while not self._init_handshake:
+        while not self.event_handshake.is_set():
             self._comm_buffer += await self._reader.read(handshake_len)
             try:
                 r_pstr, self.peer_reserved, r_info_hash, self.peer_id = decode_handshake(self._comm_buffer)
                 assert pstr == r_pstr
                 assert self.info_hash == r_info_hash
                 self._comm_buffer = self._comm_buffer[handshake_len:]
-                self._init_handshake = True
                 self.event_handshake.set()
             except IndexError:
                 pass
@@ -106,7 +102,6 @@ class Peer:
             ext_handshake_payload = b"\x00" + encode_bencode(self.client_ext_support)
             self._send_queue.put((MsgID.EXTENSION, ext_handshake_payload))
         else:
-            self._init_extension = True
             self.event_extension.set()
 
     async def _parse_message(self, recv_id: int, recv_payload: bytes) -> None:
@@ -115,18 +110,19 @@ class Peer:
                 pass
             case MsgID.CHOKE:
                 assert len(recv_payload) == 0
-                self._am_choke = True
+                self.event_am_unchoke.clear()
             case MsgID.UNCHOKE:
                 assert len(recv_payload) == 0
-                self._am_choke = False
+                self.event_am_unchoke.set()
             case MsgID.INTERESTED:
                 assert len(recv_payload) == 0
-                self._is_interested = True
+                self.event_is_interested.set()
             case MsgID.NOTINTERESTED:
                 assert len(recv_payload) == 0
-                self._is_interested = False
+                self.event_is_interested.clear()
             case MsgID.BITFIELD:
                 self.peer_bitfield = recv_payload
+                self.event_bitfield.set()
                 # if self.client_bitfield is None:
                 #     self.client_bitfield = int(0).to_bytes(len(self.peer_bitfield))
                 # self._send_queue.put((MsgID.BITFIELD, self.client_bitfield))
@@ -148,7 +144,6 @@ class Peer:
                         assert self.peer_ext_meta_id is not None
                         meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
                         self._send_queue.put((MsgID.EXTENSION, self.peer_ext_meta_id.to_bytes(1) + meta_dict))
-                    self._init_extension = True
                     self.event_extension.set()
                 # metadata
                 elif self.peer_ext_meta_id and ext_id == self.client_ext_support["m"]["ut_metadata"]:
@@ -162,7 +157,6 @@ class Peer:
                             self.peer_ext_meta_info["piece length"],
                             self.peer_ext_meta_info["name"],
                         )
-                        self._init_metadata = True
                         self.event_metadata.set()
                 # unexpected
                 else:
@@ -219,8 +213,7 @@ class Peer:
     async def initialize_pieces(
         self, pieces_hash: bytes, file_length: int, piece_length: int, file_name: str = ""
     ) -> None:
-        while self.peer_bitfield is None:
-            await asyncio.sleep(0)
+        await self.event_bitfield.wait()
 
         self.file_name = file_name
         self.pieces_hash = pieces_hash
@@ -230,12 +223,11 @@ class Peer:
         self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
         self.peer_pieces = [piece_index for piece_index in range(self.num_pieces) if self._peer_has_piece(piece_index)]
 
-        self._init_pieces = True
         self.event_pieces.set()
 
     def has_piece(self, piece_index: int) -> bool:
         assert self.num_pieces is not None
-        if not self._init_pieces:
+        if not self.event_pieces.is_set():
             raise ValueError("pieces info not initialized")
         if piece_index < 0 or piece_index >= self.num_pieces:
             return False
@@ -250,12 +242,11 @@ class Peer:
         if not self.has_piece(piece_index):
             return None
 
-        if not self._am_interested:
-            self._am_interested = True
+        if not self.event_am_interested.is_set():
+            self.event_am_interested.set()
             self._send_queue.put((MsgID.INTERESTED, b""))
 
-        while self._am_choke:
-            await asyncio.sleep(0)
+        await self.event_unchoke.wait()
 
         piece_length = self.piece_length if piece_index < self.num_pieces - 1 else self.last_piece_length
         assert piece_length > 0
