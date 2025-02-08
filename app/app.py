@@ -8,7 +8,6 @@ from typing import Any
 from .protocol import address_str_to_tuple
 from .protocol.bencode import decode_bencode
 from .protocol.handshake import decode_handshake, encode_handshake
-from .protocol.magnet import parse_magnet
 from .protocol.metainfo import load_metainfo
 from .protocol.peer import Peer
 from .protocol.tracker import Tracker
@@ -135,7 +134,7 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
 
 
 async def run_magnet_parse(magnet_link: str) -> None:
-    _, tracker_urls, info_hash_str = parse_magnet(magnet_link)
+    _, tracker_urls, info_hash_str = Tracker.parse_magnet(magnet_link)
     print("Tracker URL:", tracker_urls[0])
     print("Info Hash:", info_hash_str)
 

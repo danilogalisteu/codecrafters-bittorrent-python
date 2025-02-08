@@ -1,11 +1,12 @@
+from base64 import b32decode
 from typing import Any, Self
-import urllib.parse
+from urllib.parse import parse_qs, urlencode, urlparse
+
 
 import aiohttp
 
 from .. import address_str_to_tuple
 from ..bencode import decode_bencode
-from ..magnet import parse_magnet
 from ..metainfo import load_metainfo
 from .messages import announce_udp, connect_udp
 
@@ -48,6 +49,26 @@ class Tracker:
         self.num_pieces = len(self.pieces_hash) // 20
         self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
 
+    @staticmethod
+    def parse_magnet(url: str) -> tuple[str, list[str], str]:
+        result = urlparse(url)
+        assert result.scheme == "magnet"
+
+        query = parse_qs(result.query)
+
+        display_name = query["dn"][0] if "dn" in query else ""
+        tracker_urls = query.get("tr", [])
+        info_hash_str = query["xt"][0]
+
+        assert info_hash_str[:9] == "urn:btih:"
+        info_hash_str = info_hash_str[9:]
+
+        if len(info_hash_str) == 32:
+            info_hash_str = b32decode(info_hash_str, casefold=True).hex()
+        assert len(info_hash_str) == 40
+
+        return display_name, tracker_urls, info_hash_str
+
     @classmethod
     def from_torrent(cls, torrent_file: str, client_id: bytes) -> Self:
         infodata = load_metainfo(torrent_file)
@@ -59,7 +80,7 @@ class Tracker:
 
     @classmethod
     def from_magnet(cls, magnet_link: str, client_id: bytes, unknown_length: int = 1024) -> list[Self]:
-        _, tracker_urls, info_hash_str = parse_magnet(magnet_link)
+        _, tracker_urls, info_hash_str = cls.parse_magnet(magnet_link)
         info_hash = bytes.fromhex(info_hash_str)
         return [cls(url, info_hash, unknown_length, client_id) for url in tracker_urls]
 
@@ -73,7 +94,7 @@ class Tracker:
             "left": self.file_length,
             "compact": 1,
         }
-        url = self.url + "?" + urllib.parse.urlencode(query)
+        url = self.url + "?" + urlencode(query)
         res: dict[str | bytes, Any] | None = None
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
@@ -91,7 +112,7 @@ class Tracker:
             raise TypeError(f"unhandled tracker response:\n{res!r}")
 
     async def _get_peers_udp(self) -> None:
-        url_info = urllib.parse.urlparse(self.url)
+        url_info = urlparse(self.url)
         tracker_address = address_str_to_tuple(url_info.netloc)
         self.connection_id = await connect_udp(tracker_address)
         self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(
