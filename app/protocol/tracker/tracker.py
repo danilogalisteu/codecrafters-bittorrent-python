@@ -5,9 +5,9 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 import aiohttp
 
-from .. import address_str_to_tuple
-from ..bencode import decode_bencode
-from ..metainfo import load_metainfo
+from app.protocol import address_str_to_tuple
+from app.protocol.bencode import decode_bencode
+from app.protocol.metainfo import load_metainfo
 from .messages import announce_udp, connect_udp
 
 
