@@ -29,7 +29,7 @@ class Tracker:
         self.client_id = client_id
         self.port: int = 6881
         self.connection_id: int | None = None
-        self.peers: list[tuple[str, int]] | None = None
+        self.peer_addresses: list[tuple[str, int]] | None = None
         self.interval: int | None = None
         self.leechers: int | None = None
         self.seeders: int | None = None
@@ -66,11 +66,6 @@ class Tracker:
             for url in tracker_urls
         ]
 
-    def print_peers(self) -> None:
-        assert self.peers is not None
-        for peer in self.peers:
-            print(f"{peer[0]}:{peer[1]}")
-
     async def _get_peers_tcp(self) -> None:
         query = {
             "info_hash": self.info_hash,
@@ -89,10 +84,10 @@ class Tracker:
                 assert isinstance(data, dict)
                 res = data
 
-        self.peers = []
+        self.peer_addresses = []
         if isinstance(res, dict):
             if "peers" in res:
-                self.peers = peer_list_from_bytes(res["peers"])
+                self.peer_addresses = peer_list_from_bytes(res["peers"])
             else:
                 raise ValueError(f"invalid tracker response, missing 'peers':\n{res}")
         else:
@@ -103,15 +98,20 @@ class Tracker:
         tracker_address = address_str_to_tuple(url_info.netloc)
         self.connection_id = await connect_udp(tracker_address)
         self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(tracker_address, self.connection_id, self.info_hash, self.client_id, self.port, 0, self.file_length, 0)
-        self.peers = peer_list_from_bytes(peers_bytes)
+        self.peer_addresses = peer_list_from_bytes(peers_bytes)
 
     async def get_peers(self) -> list[tuple[str, int]]:
         if self.url.startswith("http"):
             await self._get_peers_tcp()
-            return self.peers or []
+            return self.peer_addresses or []
 
         if self.url.startswith("udp"):
             await self._get_peers_udp()
-            return self.peers or []
+            return self.peer_addresses or []
 
         raise ValueError(f"unknown tracker protocol {self.url}")
+
+    def print_peers(self) -> None:
+        assert self.peer_addresses is not None
+        for address in self.peer_addresses:
+            print(f"{address[0]}:{address[1]}")
