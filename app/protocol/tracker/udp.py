@@ -12,7 +12,7 @@ class UDPSender(asyncio.DatagramProtocol):
         self.transport = transport
         self.transport.sendto(self.send_data)
 
-    def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
+    def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:  # noqa: ARG002
         self.recv_data = data
         assert self.transport is not None
         self.transport.close()
@@ -20,7 +20,7 @@ class UDPSender(asyncio.DatagramProtocol):
     def error_received(self, exc: OSError) -> None:  # type: ignore[override]
         print("Error received:", exc)
 
-    def connection_lost(self, exc: Exception | None) -> None:
+    def connection_lost(self, exc: Exception | None) -> None:  # noqa: ARG002
         self.on_con_lost.set_result(True)
 
 
