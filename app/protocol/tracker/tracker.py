@@ -33,10 +33,20 @@ class Tracker:
         self.interval: int | None = None
         self.leechers: int | None = None
         self.seeders: int | None = None
-        # from torrent
-        self.pieces_hash: bytes | None = None
+        # from torrent or peer
         self.file_name: str | None = None
         self.piece_length: int | None = None
+        self.pieces_hash: bytes | None = None
+        self.num_pieces: int | None = None
+        self.last_piece_length: int | None = None
+
+    def init_pieces(self, file_name: str, file_length: int, piece_length: int, pieces_hash: bytes):
+        self.file_name = file_name
+        self.file_length = file_length
+        self.piece_length = piece_length
+        self.pieces_hash = pieces_hash
+        self.num_pieces = len(self.pieces_hash) // 20
+        self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
 
     @classmethod
     def from_torrent(cls, torrent_file: str, client_id: bytes) -> Self:
@@ -44,9 +54,7 @@ class Tracker:
         assert infodata is not None
         url, info_hash, pieces_hash, file_name, file_length, piece_length = infodata
         tracker = cls(url, info_hash, file_length, client_id)
-        tracker.pieces_hash = pieces_hash
-        tracker.file_name = file_name
-        tracker.piece_length = piece_length
+        tracker.init_pieces(file_name, file_length, piece_length, pieces_hash)
         return tracker
 
     @classmethod
