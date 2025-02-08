@@ -115,7 +115,14 @@ class Tracker:
         tracker_address = address_str_to_tuple(url_info.netloc)
         self.connection_id = await connect_udp(tracker_address)
         self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(
-            tracker_address, self.connection_id, self.info_hash, self.client_id, self.port, 0, self.file_length, 0
+            tracker_address,
+            self.connection_id,
+            self.info_hash,
+            self.client_id,
+            self.port,
+            0,
+            self.file_length,
+            0,
         )
         self.peer_addresses = peer_list_from_bytes(peers_bytes)
 

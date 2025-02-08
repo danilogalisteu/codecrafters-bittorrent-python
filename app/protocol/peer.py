@@ -211,7 +211,11 @@ class Peer:
         self._abort = True
 
     async def initialize_pieces(
-        self, pieces_hash: bytes, file_length: int, piece_length: int, file_name: str = ""
+        self,
+        pieces_hash: bytes,
+        file_length: int,
+        piece_length: int,
+        file_name: str = "",
     ) -> None:
         await self.event_bitfield.wait()
 

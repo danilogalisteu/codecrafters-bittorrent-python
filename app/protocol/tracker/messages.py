@@ -63,7 +63,15 @@ async def announce_udp(
     send_data += info_hash
     send_data += client_id
     send_data += struct.pack(
-        "!qqqiIIiH", downloaded, left, uploaded, UDPEvent.NONE.value, 0, client_key, -1, client_port
+        "!qqqiIIiH",
+        downloaded,
+        left,
+        uploaded,
+        UDPEvent.NONE.value,
+        0,
+        client_key,
+        -1,
+        client_port,
     )
     recv_data = await send_recv_udp_data(
         (address[0], int(address[1])),

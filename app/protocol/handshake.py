@@ -1,5 +1,8 @@
 def encode_handshake(
-    pstr: bytes, info_hash: bytes, peer_id: bytes, reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00"
+    pstr: bytes,
+    info_hash: bytes,
+    peer_id: bytes,
+    reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
 ) -> bytes:
     pstrlen = len(pstr)
     message = bytearray(49 + pstrlen)

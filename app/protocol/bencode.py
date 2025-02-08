@@ -44,7 +44,8 @@ def decode_int(value: bytes, pos: int) -> tuple[int, int]:
 
 
 def decode_bencode(
-    value: bytes, pos: int = 0
+    value: bytes,
+    pos: int = 0,
 ) -> tuple[str, int] | tuple[bytes, int] | tuple[int, int] | tuple[list[Any], int] | tuple[dict[str | bytes, Any], int]:
     if chr(value[pos]).isdigit():
         return decode_str(value, pos)
