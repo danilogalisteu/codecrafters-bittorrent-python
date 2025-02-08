@@ -35,7 +35,7 @@ async def run_info(torrent_file: str) -> None:
 async def run_peers(torrent_file: str, peer_id: bytes) -> None:
     infodata = load_metainfo(torrent_file)
     assert infodata is not None
-    url, info_hash, _, file_length, _ = infodata
+    url, info_hash, _, _, file_length, _ = infodata
     tracker = Tracker(url, info_hash, file_length, peer_id)
     _ = await tracker.get_peers()
     tracker.print_peers()
@@ -60,7 +60,7 @@ async def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes) ->
 async def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, peer_id: bytes) -> None:
     infodata = load_metainfo(torrent_file)
     assert infodata is not None
-    url, info_hash, pieces_hash, file_length, piece_length = infodata
+    url, info_hash, pieces_hash, file_name, file_length, piece_length = infodata
 
     if piece_index >= len(pieces_hash) // 20:
         raise IndexError(f"Piece {piece_index} not found in torrent")
@@ -78,6 +78,8 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
             break
 
     if piece is not None:
+        if file_name and not piece_file:
+            piece_file = file_name + f"_piece{piece_index}"
         with pathlib.Path(piece_file).open("wb") as file:
             file.write(piece)
     else:
@@ -87,7 +89,7 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
 async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None:
     infodata = load_metainfo(torrent_file)
     assert infodata is not None
-    url, info_hash, pieces_hash, file_length, piece_length = infodata
+    url, info_hash, pieces_hash, file_name, file_length, piece_length = infodata
     num_pieces = len(pieces_hash) // 20
 
     tracker = Tracker(url, info_hash, file_length, peer_id)
@@ -135,6 +137,8 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
     if missing_pieces:
         print("Some pieces are missing:", ", ".join(map(str, missing_pieces)))
     else:
+        if file_name and not out_file:
+            out_file = file_name
         with pathlib.Path(out_file).open("wb") as file:
             for piece_index in sorted(results):
                 file.write(results[piece_index])
@@ -357,7 +361,7 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
         description="download piece of file",
         help="download piece of file",
     )
-    parser_piece.add_argument("-o", type=str, required=True, dest="piece_file", metavar="piece_file", help="path to piece file (will be overwritten)")
+    parser_piece.add_argument("-o", type=str, required=False, dest="piece_file", metavar="piece_file", help="path to piece file (will be overwritten)")
     parser_piece.add_argument("torrent_file", type=str, help="path to torrent file")
     parser_piece.add_argument("piece_index", type=int, help="index of the piece (starting at 0)")
     parser_piece.set_defaults(command_cb=run_download_piece, peer_id=peer_id)
@@ -367,7 +371,7 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
         description="download file",
         help="download file",
     )
-    parser_file.add_argument("-o", type=str, required=True, dest="out_file", metavar="out_file", help="path to file (will be overwritten)")
+    parser_file.add_argument("-o", type=str, required=False, dest="out_file", metavar="out_file", help="path to file (will be overwritten)")
     parser_file.add_argument("torrent_file", type=str, help="path to torrent file")
     parser_file.set_defaults(command_cb=run_download, peer_id=peer_id)
 
