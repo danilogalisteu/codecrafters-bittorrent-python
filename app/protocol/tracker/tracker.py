@@ -96,11 +96,10 @@ class Tracker:
         }
         url = self.url + "?" + urlencode(query)
         res: dict[str | bytes, Any] | None = None
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                data, _ = decode_bencode(await response.read())
-                assert isinstance(data, dict)
-                res = data
+        async with aiohttp.ClientSession() as session, session.get(url) as response:
+            data, _ = decode_bencode(await response.read())
+            assert isinstance(data, dict)
+            res = data
 
         self.peer_addresses = []
         if isinstance(res, dict):
