@@ -12,6 +12,11 @@ from .protocol.peer import Peer
 from .protocol.tracker import Tracker
 
 
+def stdlib_write(data: bytes, file_name: str, mode: str = "wb") -> int:
+    with pathlib.Path(file_name).open(mode) as fp:
+        return fp.write(data)
+
+
 async def run_decode(value: str) -> None:
     bencoded_value = value.encode()
 
@@ -68,8 +73,7 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
     if piece is not None:
         if tracker.file_name and not piece_file:
             piece_file = tracker.file_name + f"_piece{piece_index}"
-        with pathlib.Path(piece_file).open("wb") as file:
-            file.write(piece)
+        await asyncio.to_thread(stdlib_write, piece, piece_file, "wb")
     else:
         print(f"Piece {piece_index} not found in any peer")
 
@@ -126,9 +130,8 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
     else:
         if tracker.file_name and not out_file:
             out_file = tracker.file_name
-        with pathlib.Path(out_file).open("wb") as file:
-            for piece_index in sorted(results):
-                file.write(results[piece_index])
+        for piece_index in sorted(results):
+            await asyncio.to_thread(stdlib_write, results[piece_index], out_file, "ab")
 
 
 async def run_magnet_parse(magnet_link: str) -> None:
@@ -230,8 +233,7 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
     if piece is not None:
         if peer.file_name and not piece_file:
             piece_file = peer.file_name + f"_piece{piece_index}"
-        with pathlib.Path(piece_file).open("wb") as file:
-            file.write(piece)
+        await asyncio.to_thread(stdlib_write, piece, piece_file, "wb")
     else:
         print(f"Piece {piece_index} not found in any peer")
 
@@ -299,6 +301,5 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
         file_name = peers[addresses[0]].file_name
         if file_name and not out_file:
             out_file = file_name
-        with pathlib.Path(out_file).open("wb") as file:
-            for piece_index in sorted(results):
-                file.write(results[piece_index])
+        for piece_index in sorted(results):
+            await asyncio.to_thread(stdlib_write, results[piece_index], out_file, "ab")
