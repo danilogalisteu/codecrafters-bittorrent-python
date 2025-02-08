@@ -5,6 +5,7 @@ import aiohttp
 
 from .. import address_str_to_tuple
 from ..bencode import decode_bencode
+from ..magnet import parse_magnet
 from ..metainfo import load_metainfo
 from .messages import announce_udp, connect_udp
 
@@ -47,6 +48,15 @@ class Tracker:
         tracker.file_name = file_name
         tracker.piece_length = piece_length
         return tracker
+
+    @classmethod
+    def from_magnet(cls, magnet_link: str, client_id: bytes, unknown_length: int=1024):
+        _, tracker_urls, info_hash_str = parse_magnet(magnet_link)
+        info_hash = bytes.fromhex(info_hash_str)
+        return [
+            Tracker(url, info_hash, unknown_length, client_id)
+            for url in tracker_urls
+        ]
 
     def print_peers(self) -> None:
         assert self.peers is not None
