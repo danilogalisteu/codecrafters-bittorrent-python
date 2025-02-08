@@ -1,7 +1,6 @@
 import asyncio
 import json
 import pathlib
-import queue
 import socket
 from typing import Any
 
@@ -82,18 +81,18 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
 
     worker_task: dict[tuple[str, int], asyncio.Task[None]] = {}
     results: dict[int, bytes] = {}
-    jobs: queue.Queue[int] = queue.Queue()
-    workers: queue.Queue[tuple[str, int]] = queue.Queue()
+    jobs: asyncio.Queue[int] = asyncio.Queue()
+    workers: asyncio.Queue[tuple[str, int]] = asyncio.Queue()
 
     # print("adding workers")
     addresses = await tracker.get_peers()
     for address in addresses:
-        workers.put(address)
+        await workers.put(address)
 
     # print("scheduling jobs")
     num_pieces = len(tracker.pieces_hash) // 20
     for piece_index in range(num_pieces):
-        jobs.put(piece_index)
+        await jobs.put(piece_index)
 
     async def peer_worker(tracker: Tracker, address: tuple[str, int], piece_index: int) -> None:
         assert tracker.pieces_hash is not None
@@ -106,8 +105,9 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
         peer_task.cancel()
         if piece is not None:
             results[piece_index] = piece
+            jobs.task_done()
             # print("peer", address, "finished job", piece_index)
-        workers.put(address)
+        await workers.put(address)
         worker_task[address].cancel()
         del worker_task[address]
 
@@ -115,10 +115,8 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
         if len(results) == num_pieces:
             break
         if not jobs.empty():
-            piece_index = jobs.get()
-            while workers.empty():
-                await asyncio.sleep(0)
-            address = workers.get()
+            piece_index = await jobs.get()
+            address = await workers.get()
             worker_task[address] = asyncio.create_task(peer_worker(tracker, address, piece_index))
         await asyncio.sleep(0)
 
@@ -249,8 +247,8 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
     peers_task = {}
     worker_task: dict[tuple[str, int], asyncio.Task[None]] = {}
     results: dict[int, bytes] = {}
-    jobs: queue.Queue[int] = queue.Queue()
-    workers: queue.Queue[tuple[str, int]] = queue.Queue()
+    jobs: asyncio.Queue[int] = asyncio.Queue()
+    workers: asyncio.Queue[tuple[str, int]] = asyncio.Queue()
 
     for address in addresses:
         peers[address] = Peer(address, tracker.info_hash, client_id, extension_reserved, extension_support)
@@ -264,11 +262,11 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
 
     # print("adding workers")
     for address in peers:
-        workers.put(address)
+        await workers.put(address)
 
     # print("scheduling jobs")
     for piece_index in range(num_pieces):
-        jobs.put(piece_index)
+        await jobs.put(piece_index)
 
     async def peer_worker(address: tuple[str, int], piece_index: int) -> None:
         # print("peer", address, "received job", piece_index)
@@ -276,8 +274,9 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
         piece = await peer.get_piece(piece_index)
         if piece is not None:
             results[piece_index] = piece
+            jobs.task_done()
             # print("peer", address, "finished job", piece_index)
-        workers.put(address)
+        await workers.put(address)
         worker_task[address].cancel()
         del worker_task[address]
 
@@ -285,10 +284,8 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
         if len(results) == num_pieces:
             break
         if not jobs.empty():
-            piece_index = jobs.get()
-            while workers.empty():
-                await asyncio.sleep(0)
-            address = workers.get()
+            piece_index = await jobs.get()
+            address = await workers.get()
             worker_task[address] = asyncio.create_task(peer_worker(address, piece_index))
         await asyncio.sleep(0)
 
