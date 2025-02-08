@@ -1,1 +1,3 @@
-from .tracker import Tracker as Tracker
+from .tracker import Tracker
+
+__all__ = ["Tracker"]
