@@ -43,7 +43,7 @@ class Tracker:
         infodata = load_metainfo(torrent_file)
         assert infodata is not None
         url, info_hash, pieces_hash, file_name, file_length, piece_length = infodata
-        tracker = Tracker(url, info_hash, file_length, client_id)
+        tracker = cls(url, info_hash, file_length, client_id)
         tracker.pieces_hash = pieces_hash
         tracker.file_name = file_name
         tracker.piece_length = piece_length
@@ -54,7 +54,7 @@ class Tracker:
         _, tracker_urls, info_hash_str = parse_magnet(magnet_link)
         info_hash = bytes.fromhex(info_hash_str)
         return [
-            Tracker(url, info_hash, unknown_length, client_id)
+            cls(url, info_hash, unknown_length, client_id)
             for url in tracker_urls
         ]
 
