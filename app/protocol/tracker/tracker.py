@@ -5,6 +5,7 @@ import aiohttp
 
 from .. import address_str_to_tuple
 from ..bencode import decode_bencode
+from ..metainfo import load_metainfo
 from .messages import announce_udp, connect_udp
 
 
@@ -31,6 +32,21 @@ class Tracker:
         self.interval: int | None = None
         self.leechers: int | None = None
         self.seeders: int | None = None
+        # from torrent
+        self.pieces_hash: bytes | None = None
+        self.file_name: str | None = None
+        self.piece_length: int | None = None
+
+    @classmethod
+    def from_torrent(cls, torrent_file: str, client_id: bytes):
+        infodata = load_metainfo(torrent_file)
+        assert infodata is not None
+        url, info_hash, pieces_hash, file_name, file_length, piece_length = infodata
+        tracker = Tracker(url, info_hash, file_length, client_id)
+        tracker.pieces_hash = pieces_hash
+        tracker.file_name = file_name
+        tracker.piece_length = piece_length
+        return tracker
 
     def print_peers(self) -> None:
         assert self.peers is not None
