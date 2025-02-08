@@ -56,8 +56,10 @@ async def run_handshake(torrent_file: str, peer_address: str, client_id: bytes) 
 
 async def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, client_id: bytes) -> None:
     tracker = Tracker.from_torrent(torrent_file, client_id)
-    addresses = await tracker.get_peers()
+    assert tracker.pieces_hash is not None
+    assert tracker.piece_length is not None
 
+    addresses = await tracker.get_peers()
     for address in addresses:
         peer = Peer(address, tracker.info_hash, client_id)
         peer_task = peer.run_task()
@@ -79,8 +81,8 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
 
 async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> None:
     tracker = Tracker.from_torrent(torrent_file, client_id)
-    num_pieces = len(tracker.pieces_hash) // 20
-    addresses = await tracker.get_peers()
+    assert tracker.pieces_hash is not None
+    assert tracker.piece_length is not None
 
     worker_task:dict[tuple[str, int], asyncio.Task[None]] = {}
     results: dict[int, bytes] = {}
@@ -88,14 +90,18 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
     workers: queue.Queue[tuple[str, int]] = queue.Queue()
 
     # print("adding workers")
+    addresses = await tracker.get_peers()
     for address in addresses:
         workers.put(address)
 
     # print("scheduling jobs")
+    num_pieces = len(tracker.pieces_hash) // 20
     for piece_index in range(num_pieces):
         jobs.put(piece_index)
 
-    async def peer_worker(address: tuple[str, int], piece_index: int) -> None:
+    async def peer_worker(tracker: Tracker, address: tuple[str, int], piece_index: int) -> None:
+        assert tracker.pieces_hash is not None
+        assert tracker.piece_length is not None
         # print("peer", address, "received job", piece_index)
         peer = Peer(address, tracker.info_hash, client_id)
         peer_task = peer.run_task()
@@ -117,7 +123,7 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
             while workers.empty():
                 await asyncio.sleep(0)
             address = workers.get()
-            worker_task[address] = asyncio.create_task(peer_worker(address, piece_index))
+            worker_task[address] = asyncio.create_task(peer_worker(tracker, address, piece_index))
         await asyncio.sleep(0)
 
     missing_pieces = [piece_index for piece_index in range(num_pieces) if piece_index not in results]
@@ -285,8 +291,9 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
     if missing_pieces:
         print("Some pieces are missing:", ", ".join(map(str, missing_pieces)))
     else:
-        if peers[addresses[0]].file_name and not out_file:
-            out_file = peers[addresses[0]].file_name
+        file_name = peers[addresses[0]].file_name
+        if file_name and not out_file:
+            out_file = file_name
         with pathlib.Path(out_file).open("wb") as file:
             for piece_index in sorted(results):
                 file.write(results[piece_index])
