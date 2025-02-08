@@ -246,7 +246,7 @@ class Peer:
             self.event_am_interested.set()
             self._send_queue.put((MsgID.INTERESTED, b""))
 
-        await self.event_unchoke.wait()
+        await self.event_am_unchoke.wait()
 
         piece_length = self.piece_length if piece_index < self.num_pieces - 1 else self.last_piece_length
         assert piece_length > 0
