@@ -212,6 +212,7 @@ async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
     assert peer.piece_length is not None
     assert peer.num_pieces is not None
     print("Tracker URL:", trackers[0])
+    print("File name:", peer.file_name)
     print("Length:", peer.file_length)
     print("Info Hash:", info_hash_str)
     print("Piece Length:", peer.piece_length)
@@ -242,6 +243,8 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
             break
 
     if piece is not None:
+        if peer.file_name and not piece_file:
+            piece_file = peer.file_name + f"_piece{piece_index}"
         with pathlib.Path(piece_file).open("wb") as file:
             file.write(piece)
     else:
@@ -313,6 +316,8 @@ async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -
     if missing_pieces:
         print("Some pieces are missing:", ", ".join(map(str, missing_pieces)))
     else:
+        if peers[addresses[0]].file_name and not out_file:
+            out_file = peers[addresses[0]].file_name
         with pathlib.Path(out_file).open("wb") as file:
             for piece_index in sorted(results):
                 file.write(results[piece_index])
@@ -404,7 +409,7 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
         description="download piece of file from magnet link",
         help="download piece of file from magnet link",
     )
-    parser_magnet_piece.add_argument("-o", type=str, required=True, dest="piece_file", metavar="piece_file", help="path to piece file (will be overwritten)")
+    parser_magnet_piece.add_argument("-o", type=str, required=False, dest="piece_file", metavar="piece_file", help="path to piece file (will be overwritten)")
     parser_magnet_piece.add_argument("magnet_link", type=str, help="magnet link")
     parser_magnet_piece.add_argument("piece_index", type=int, help="index of the piece (starting at 0)")
     parser_magnet_piece.set_defaults(command_cb=run_magnet_piece, peer_id=peer_id)
@@ -414,7 +419,7 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
         description="download file from magnet link",
         help="download file from magnet link",
     )
-    parser_magnet_download.add_argument("-o", type=str, required=True, dest="out_file", metavar="out_file", help="path to file (will be overwritten)")
+    parser_magnet_download.add_argument("-o", type=str, required=False, dest="out_file", metavar="out_file", help="path to file (will be overwritten)")
     parser_magnet_download.add_argument("magnet_link", type=str, help="magnet link")
     parser_magnet_download.set_defaults(command_cb=run_magnet_download, peer_id=peer_id)
 
