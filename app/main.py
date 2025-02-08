@@ -33,10 +33,7 @@ async def run_info(torrent_file: str) -> None:
 
 
 async def run_peers(torrent_file: str, client_id: bytes) -> None:
-    infodata = load_metainfo(torrent_file)
-    assert infodata is not None
-    url, info_hash, _, _, file_length, _ = infodata
-    tracker = Tracker(url, info_hash, file_length, client_id)
+    tracker = Tracker.from_torrent(torrent_file, client_id)
     _ = await tracker.get_peers()
     tracker.print_peers()
 
@@ -58,14 +55,7 @@ async def run_handshake(torrent_file: str, peer_address: str, client_id: bytes) 
 
 
 async def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, client_id: bytes) -> None:
-    infodata = load_metainfo(torrent_file)
-    assert infodata is not None
-    url, info_hash, pieces_hash, file_name, file_length, piece_length = infodata
-
-    if piece_index >= len(pieces_hash) // 20:
-        raise IndexError(f"Piece {piece_index} not found in torrent")
-
-    tracker = Tracker(url, info_hash, file_length, client_id)
+    tracker = Tracker.from_torrent(torrent_file, client_id)
     addresses = await tracker.get_peers()
 
     for address in addresses:
@@ -79,8 +69,8 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
             break
 
     if piece is not None:
-        if file_name and not piece_file:
-            piece_file = file_name + f"_piece{piece_index}"
+        if tracker.file_name and not piece_file:
+            piece_file = tracker.file_name + f"_piece{piece_index}"
         with pathlib.Path(piece_file).open("wb") as file:
             file.write(piece)
     else:
@@ -88,12 +78,8 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
 
 
 async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> None:
-    infodata = load_metainfo(torrent_file)
-    assert infodata is not None
-    url, info_hash, pieces_hash, file_name, file_length, piece_length = infodata
-    num_pieces = len(pieces_hash) // 20
-
-    tracker = Tracker(url, info_hash, file_length, client_id)
+    tracker = Tracker.from_torrent(torrent_file, client_id)
+    num_pieces = len(tracker.pieces_hash) // 20
     addresses = await tracker.get_peers()
 
     worker_task:dict[tuple[str, int], asyncio.Task[None]] = {}
@@ -111,9 +97,9 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
 
     async def peer_worker(address: tuple[str, int], piece_index: int) -> None:
         # print("peer", address, "received job", piece_index)
-        peer = Peer(address, info_hash, client_id)
+        peer = Peer(address, tracker.info_hash, client_id)
         peer_task = peer.run_task()
-        await peer.initialize_pieces(pieces_hash, file_length, piece_length)
+        await peer.initialize_pieces(tracker.pieces_hash, tracker.file_length, tracker.piece_length)
         piece = await peer.get_piece(piece_index)
         peer_task.cancel()
         if piece is not None:
@@ -138,8 +124,8 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
     if missing_pieces:
         print("Some pieces are missing:", ", ".join(map(str, missing_pieces)))
     else:
-        if file_name and not out_file:
-            out_file = file_name
+        if tracker.file_name and not out_file:
+            out_file = tracker.file_name
         with pathlib.Path(out_file).open("wb") as file:
             for piece_index in sorted(results):
                 file.write(results[piece_index])
