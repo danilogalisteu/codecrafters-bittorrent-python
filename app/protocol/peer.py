@@ -15,8 +15,8 @@ class Peer:
         address: tuple[str, int],
         info_hash: bytes,
         client_id: bytes,
-        client_reserved: bytes=b"\x00\x00\x00\x00\x00\x00\x00\x00",
-        client_ext_support: dict[str | bytes, Any] | None=None,
+        client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
+        client_ext_support: dict[str | bytes, Any] | None = None,
     ) -> None:
         self.address = address
         self.info_hash = info_hash
@@ -216,7 +216,9 @@ class Peer:
     def abort(self) -> None:
         self._abort = True
 
-    async def initialize_pieces(self, pieces_hash: bytes, file_length: int, piece_length: int, file_name: str="") -> None:
+    async def initialize_pieces(
+        self, pieces_hash: bytes, file_length: int, piece_length: int, file_name: str = ""
+    ) -> None:
         while self.peer_bitfield is None:
             await asyncio.sleep(0)
 
@@ -226,11 +228,7 @@ class Peer:
         self.file_length = file_length
         self.piece_length = piece_length
         self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
-        self.peer_pieces = [
-            piece_index
-            for piece_index in range(self.num_pieces)
-            if self._peer_has_piece(piece_index)
-        ]
+        self.peer_pieces = [piece_index for piece_index in range(self.num_pieces) if self._peer_has_piece(piece_index)]
 
         self._init_pieces = True
         self.event_pieces.set()
@@ -263,8 +261,8 @@ class Peer:
         assert piece_length > 0
 
         piece = b""
-        self._recv_length = 4*1024
-        chunk_length = 16*1024
+        self._recv_length = 4 * 1024
+        chunk_length = 16 * 1024
         current_begin = 0
         while current_begin < piece_length:
             eff_chunk_length = min(chunk_length, piece_length - current_begin)
@@ -283,7 +281,7 @@ class Peer:
         self._recv_length = 1024
 
         r_piece_hash = hashlib.sha1(piece).digest()
-        if r_piece_hash == self.pieces_hash[piece_index*20: piece_index*20+20]:
+        if r_piece_hash == self.pieces_hash[piece_index * 20 : piece_index * 20 + 20]:
             return piece
 
         return None

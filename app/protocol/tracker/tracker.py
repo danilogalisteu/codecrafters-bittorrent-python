@@ -14,8 +14,8 @@ def peer_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
     pos = 0
     peers = []
     while pos < len(peers_bytes):
-        peer_ip = ".".join(map(str, peers_bytes[pos:pos+4]))
-        peer_port = int.from_bytes(peers_bytes[pos+4:pos+6], "big")
+        peer_ip = ".".join(map(str, peers_bytes[pos : pos + 4]))
+        peer_port = int.from_bytes(peers_bytes[pos + 4 : pos + 6], "big")
         peers.append((peer_ip, peer_port))
         pos += 6
     return peers
@@ -58,13 +58,10 @@ class Tracker:
         return tracker
 
     @classmethod
-    def from_magnet(cls, magnet_link: str, client_id: bytes, unknown_length: int=1024) -> list[Self]:
+    def from_magnet(cls, magnet_link: str, client_id: bytes, unknown_length: int = 1024) -> list[Self]:
         _, tracker_urls, info_hash_str = parse_magnet(magnet_link)
         info_hash = bytes.fromhex(info_hash_str)
-        return [
-            cls(url, info_hash, unknown_length, client_id)
-            for url in tracker_urls
-        ]
+        return [cls(url, info_hash, unknown_length, client_id) for url in tracker_urls]
 
     async def _get_peers_tcp(self) -> None:
         query = {
@@ -97,7 +94,9 @@ class Tracker:
         url_info = urllib.parse.urlparse(self.url)
         tracker_address = address_str_to_tuple(url_info.netloc)
         self.connection_id = await connect_udp(tracker_address)
-        self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(tracker_address, self.connection_id, self.info_hash, self.client_id, self.port, 0, self.file_length, 0)
+        self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(
+            tracker_address, self.connection_id, self.info_hash, self.client_id, self.port, 0, self.file_length, 0
+        )
         self.peer_addresses = peer_list_from_bytes(peers_bytes)
 
     async def get_peers(self) -> list[tuple[str, int]]:

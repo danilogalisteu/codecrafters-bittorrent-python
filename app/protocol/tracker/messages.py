@@ -8,6 +8,7 @@ https://bittorrent.org/beps/bep_0041.html
 Bittorrent UDP-tracker protocol extension (for types)
 https://www.rasterbar.com/products/libtorrent/udp_tracker_protocol.html
 """
+
 import enum
 import random
 import struct
@@ -33,13 +34,8 @@ class UDPEvent(enum.IntEnum):
 
 
 async def connect_udp(address: tuple[str, int]) -> int:
-    transaction_id = random.randrange(-2**31, 2**31)
-    send_data = struct.pack(
-        "!qii",
-        UDP_TRACKER_PROTOCOL_ID,
-        UDPAction.CONNECT.value,
-        transaction_id
-    )
+    transaction_id = random.randrange(-(2**31), 2**31)
+    send_data = struct.pack("!qii", UDP_TRACKER_PROTOCOL_ID, UDPAction.CONNECT.value, transaction_id)
     recv_data = await send_recv_udp_data(
         (address[0], int(address[1])),
         send_data,
@@ -53,21 +49,23 @@ async def connect_udp(address: tuple[str, int]) -> int:
 
 
 async def announce_udp(
-        address: tuple[str, int],
-        connection_id: int,
-        info_hash: bytes,
-        client_id: bytes,
-        client_port: int,
-        downloaded: int,
-        left: int,
-        uploaded: int,
-        client_key: int=0,
-    ) -> tuple[int, int, int, bytes]:
-    transaction_id = random.randrange(-2**31, 2**31)
+    address: tuple[str, int],
+    connection_id: int,
+    info_hash: bytes,
+    client_id: bytes,
+    client_port: int,
+    downloaded: int,
+    left: int,
+    uploaded: int,
+    client_key: int = 0,
+) -> tuple[int, int, int, bytes]:
+    transaction_id = random.randrange(-(2**31), 2**31)
     send_data = struct.pack("!qii", connection_id, UDPAction.ANNOUNCE.value, transaction_id)
     send_data += info_hash
     send_data += client_id
-    send_data += struct.pack("!qqqiIIiH", downloaded, left, uploaded, UDPEvent.NONE.value, 0, client_key, -1, client_port)
+    send_data += struct.pack(
+        "!qqqiIIiH", downloaded, left, uploaded, UDPEvent.NONE.value, 0, client_key, -1, client_port
+    )
     recv_data = await send_recv_udp_data(
         (address[0], int(address[1])),
         send_data,

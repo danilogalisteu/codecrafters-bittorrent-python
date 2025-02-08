@@ -84,7 +84,7 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
     assert tracker.pieces_hash is not None
     assert tracker.piece_length is not None
 
-    worker_task:dict[tuple[str, int], asyncio.Task[None]] = {}
+    worker_task: dict[tuple[str, int], asyncio.Task[None]] = {}
     results: dict[int, bytes] = {}
     jobs: queue.Queue[int] = queue.Queue()
     workers: queue.Queue[tuple[str, int]] = queue.Queue()
@@ -156,7 +156,13 @@ async def run_magnet_handshake(magnet_link: str, client_id: bytes) -> None:
     tracker = Tracker.from_magnet(magnet_link, client_id)[0]
     addresses = await tracker.get_peers()
 
-    peer = Peer(addresses[0], tracker.info_hash, client_id, extension_reserved, extension_support)
+    peer = Peer(
+        addresses[0],
+        tracker.info_hash,
+        client_id,
+        extension_reserved,
+        extension_support,
+    )
     peer_task = peer.run_task()
 
     await peer.event_extension.wait()
@@ -177,7 +183,13 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
     tracker = Tracker.from_magnet(magnet_link, client_id)[0]
     addresses = await tracker.get_peers()
 
-    peer = Peer(addresses[0], tracker.info_hash, client_id, extension_reserved, extension_support)
+    peer = Peer(
+        addresses[0],
+        tracker.info_hash,
+        client_id,
+        extension_reserved,
+        extension_support,
+    )
     peer_task = peer.run_task()
 
     await peer.event_metadata.wait()
@@ -201,7 +213,7 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
     print("Piece Length:", peer.piece_length)
     print("Piece Hashes:")
     for piece_index in range(peer.num_pieces):
-        print(peer.pieces_hash[piece_index*20:piece_index*20+20].hex())
+        print(peer.pieces_hash[piece_index * 20 : piece_index * 20 + 20].hex())
 
 
 async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, client_id: bytes) -> None:
@@ -239,7 +251,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
 
     peers = {}
     peers_task = {}
-    worker_task:dict[tuple[str, int], asyncio.Task[None]] = {}
+    worker_task: dict[tuple[str, int], asyncio.Task[None]] = {}
     results: dict[int, bytes] = {}
     jobs: queue.Queue[int] = queue.Queue()
     workers: queue.Queue[tuple[str, int]] = queue.Queue()
@@ -299,7 +311,6 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
                 file.write(results[piece_index])
 
 
-
 def make_parser(client_id: bytes) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.main", description="Basic bittorrent client")
     subparsers = parser.add_subparsers(title="command", description="valid commands", required=True)
@@ -342,7 +353,14 @@ def make_parser(client_id: bytes) -> argparse.ArgumentParser:
         description="download piece of file",
         help="download piece of file",
     )
-    parser_piece.add_argument("-o", type=str, required=False, dest="piece_file", metavar="piece_file", help="path to piece file (will be overwritten)")
+    parser_piece.add_argument(
+        "-o",
+        type=str,
+        required=False,
+        dest="piece_file",
+        metavar="piece_file",
+        help="path to piece file (will be overwritten)",
+    )
     parser_piece.add_argument("torrent_file", type=str, help="path to torrent file")
     parser_piece.add_argument("piece_index", type=int, help="index of the piece (starting at 0)")
     parser_piece.set_defaults(command_cb=run_download_piece, client_id=client_id)
@@ -352,7 +370,14 @@ def make_parser(client_id: bytes) -> argparse.ArgumentParser:
         description="download file",
         help="download file",
     )
-    parser_file.add_argument("-o", type=str, required=False, dest="out_file", metavar="out_file", help="path to file (will be overwritten)")
+    parser_file.add_argument(
+        "-o",
+        type=str,
+        required=False,
+        dest="out_file",
+        metavar="out_file",
+        help="path to file (will be overwritten)",
+    )
     parser_file.add_argument("torrent_file", type=str, help="path to torrent file")
     parser_file.set_defaults(command_cb=run_download, client_id=client_id)
 
@@ -385,7 +410,14 @@ def make_parser(client_id: bytes) -> argparse.ArgumentParser:
         description="download piece of file from magnet link",
         help="download piece of file from magnet link",
     )
-    parser_magnet_piece.add_argument("-o", type=str, required=False, dest="piece_file", metavar="piece_file", help="path to piece file (will be overwritten)")
+    parser_magnet_piece.add_argument(
+        "-o",
+        type=str,
+        required=False,
+        dest="piece_file",
+        metavar="piece_file",
+        help="path to piece file (will be overwritten)",
+    )
     parser_magnet_piece.add_argument("magnet_link", type=str, help="magnet link")
     parser_magnet_piece.add_argument("piece_index", type=int, help="index of the piece (starting at 0)")
     parser_magnet_piece.set_defaults(command_cb=run_magnet_piece, client_id=client_id)
@@ -395,7 +427,14 @@ def make_parser(client_id: bytes) -> argparse.ArgumentParser:
         description="download file from magnet link",
         help="download file from magnet link",
     )
-    parser_magnet_download.add_argument("-o", type=str, required=False, dest="out_file", metavar="out_file", help="path to file (will be overwritten)")
+    parser_magnet_download.add_argument(
+        "-o",
+        type=str,
+        required=False,
+        dest="out_file",
+        metavar="out_file",
+        help="path to file (will be overwritten)",
+    )
     parser_magnet_download.add_argument("magnet_link", type=str, help="magnet link")
     parser_magnet_download.set_defaults(command_cb=run_magnet_download, client_id=client_id)
 
@@ -409,7 +448,7 @@ def main() -> None:
     args = parser.parse_args(sys.argv[1:])
     command_cb = args.command_cb
 
-    asyncio.run(command_cb(**{k:v for k, v in vars(args).items() if k != "command_cb"}))
+    asyncio.run(command_cb(**{k: v for k, v in vars(args).items() if k != "command_cb"}))
 
 
 if __name__ == "__main__":

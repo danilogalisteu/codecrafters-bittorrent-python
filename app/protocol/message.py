@@ -17,7 +17,7 @@ class MsgID(IntEnum):
     EXTENSION = 20
 
 
-def encode_message(send_id: int | None=None, payload: bytes=b"") -> bytes:
+def encode_message(send_id: int | None = None, payload: bytes = b"") -> bytes:
     payload_length = len(payload)
     buffer = bytearray(4 + (1 if send_id else 0) + payload_length)
     buffer[:4] = struct.pack("!I", (1 if send_id else 0) + payload_length)
@@ -44,9 +44,9 @@ def decode_message(buffer: bytes) -> tuple[int, bytes, bytes]:
     if payload_length > 0:
         recv_id = buffer[4]
     if payload_length > 1:
-        payload = buffer[5:4+payload_length]
+        payload = buffer[5 : 4 + payload_length]
 
     # Drop parsed data from buffer
-    buffer = buffer[4+payload_length:]
+    buffer = buffer[4 + payload_length :]
 
     return recv_id, payload, buffer

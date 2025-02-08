@@ -27,9 +27,9 @@ def decode_str(value: bytes, pos: int) -> tuple[str, int] | tuple[bytes, int]:
     first_colon_index = value[pos:].find(b":")
     if first_colon_index == -1:
         raise ValueError("Invalid encoded value")
-    str_length = int(value[pos:pos+first_colon_index])
-    str_pos = pos+first_colon_index+1
-    str_end = str_pos+str_length
+    str_length = int(value[pos : pos + first_colon_index])
+    str_pos = pos + first_colon_index + 1
+    str_end = str_pos + str_length
     try:
         return value[str_pos:str_end].decode(), str_end
     except UnicodeDecodeError:
@@ -40,10 +40,12 @@ def decode_int(value: bytes, pos: int) -> tuple[int, int]:
     end = pos + 1
     while chr(value[end]) != "e":
         end += 1
-    return int(value[pos+1:end]), end + 1
+    return int(value[pos + 1 : end]), end + 1
 
 
-def decode_bencode(value: bytes, pos: int=0) -> tuple[str, int] | tuple[bytes, int] | tuple[int, int] | tuple[list[Any], int] | tuple[dict[str | bytes, Any], int]:
+def decode_bencode(
+    value: bytes, pos: int = 0
+) -> tuple[str, int] | tuple[bytes, int] | tuple[int, int] | tuple[list[Any], int] | tuple[dict[str | bytes, Any], int]:
     if chr(value[pos]).isdigit():
         return decode_str(value, pos)
     if chr(value[pos]) == "i":
