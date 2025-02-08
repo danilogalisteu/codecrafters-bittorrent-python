@@ -132,8 +132,8 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
 
 
 async def run_magnet_parse(magnet_link: str) -> None:
-    _, trackers, info_hash_str = parse_magnet(magnet_link)
-    print("Tracker URL:", trackers[0])
+    _, tracker_urls, info_hash_str = parse_magnet(magnet_link)
+    print("Tracker URL:", tracker_urls[0])
     print("Info Hash:", info_hash_str)
 
 
@@ -148,10 +148,10 @@ async def run_magnet_handshake(magnet_link: str, client_id: bytes) -> None:
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    _, trackers, info_hash_str = parse_magnet(magnet_link)
+    _, tracker_urls, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
 
-    tracker = Tracker(trackers[0], info_hash, unknown_length, client_id)
+    tracker = Tracker(tracker_urls[0], info_hash, unknown_length, client_id)
     addresses = await tracker.get_peers()
 
     peer = Peer(addresses[0], info_hash, client_id, extension_reserved, extension_support)
@@ -173,10 +173,10 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    _, trackers, info_hash_str = parse_magnet(magnet_link)
+    _, tracker_urls, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
 
-    tracker = Tracker(trackers[0], info_hash, unknown_length, client_id)
+    tracker = Tracker(tracker_urls[0], info_hash, unknown_length, client_id)
     addresses = await tracker.get_peers()
 
     peer = Peer(addresses[0], info_hash, client_id, extension_reserved, extension_support)
@@ -196,7 +196,7 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
     assert peer.file_length is not None
     assert peer.piece_length is not None
     assert peer.num_pieces is not None
-    print("Tracker URL:", trackers[0])
+    print("Tracker URL:", tracker_urls[0])
     print("File name:", peer.file_name)
     print("Length:", peer.file_length)
     print("Info Hash:", info_hash_str)
@@ -211,10 +211,10 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    _, trackers, info_hash_str = parse_magnet(magnet_link)
+    _, tracker_urls, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
 
-    tracker = Tracker(trackers[0], info_hash, unknown_length, client_id)
+    tracker = Tracker(tracker_urls[0], info_hash, unknown_length, client_id)
     addresses = await tracker.get_peers()
 
     for address in addresses:
@@ -241,10 +241,10 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    _, trackers, info_hash_str = parse_magnet(magnet_link)
+    _, tracker_urls, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
 
-    tracker = Tracker(trackers[0], info_hash, unknown_length, client_id)
+    tracker = Tracker(tracker_urls[0], info_hash, unknown_length, client_id)
     addresses = await tracker.get_peers()
 
     peers = {}
