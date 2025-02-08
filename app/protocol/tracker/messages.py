@@ -15,7 +15,6 @@ import struct
 
 from .udp import send_recv_udp_data
 
-
 UDP_TRACKER_PROTOCOL_ID = int("0x41727101980", 16)
 
 

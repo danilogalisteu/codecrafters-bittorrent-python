@@ -5,16 +5,16 @@ import sys
 
 from .app import (
     run_decode,
-    run_info,
-    run_peers,
-    run_handshake,
-    run_download_piece,
     run_download,
-    run_magnet_parse,
+    run_download_piece,
+    run_handshake,
+    run_info,
+    run_magnet_download,
     run_magnet_handshake,
     run_magnet_info,
+    run_magnet_parse,
     run_magnet_piece,
-    run_magnet_download,
+    run_peers,
 )
 
 

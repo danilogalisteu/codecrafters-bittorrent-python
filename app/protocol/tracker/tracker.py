@@ -2,12 +2,12 @@ from base64 import b32decode
 from typing import Any, Self
 from urllib.parse import parse_qs, urlencode, urlparse
 
-
 import aiohttp
 
 from app.protocol import address_str_to_tuple
 from app.protocol.bencode import decode_bencode
 from app.protocol.metainfo import load_metainfo
+
 from .messages import announce_udp, connect_udp
 
 
