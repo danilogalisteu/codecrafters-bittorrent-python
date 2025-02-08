@@ -32,16 +32,16 @@ async def run_info(torrent_file: str) -> None:
     _ = load_metainfo(torrent_file, show_info=True)
 
 
-async def run_peers(torrent_file: str, peer_id: bytes) -> None:
+async def run_peers(torrent_file: str, client_id: bytes) -> None:
     infodata = load_metainfo(torrent_file)
     assert infodata is not None
     url, info_hash, _, _, file_length, _ = infodata
-    tracker = Tracker(url, info_hash, file_length, peer_id)
+    tracker = Tracker(url, info_hash, file_length, client_id)
     _ = await tracker.get_peers()
     tracker.print_peers()
 
 
-async def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes) -> None:
+async def run_handshake(torrent_file: str, peer_address: str, client_id: bytes) -> None:
     peer = address_str_to_tuple(peer_address)
     infodata = load_metainfo(torrent_file)
     assert infodata is not None
@@ -50,14 +50,14 @@ async def run_handshake(torrent_file: str, peer_address: str, peer_id: bytes) ->
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect(peer)
         protocol = b"BitTorrent protocol"
-        sock.send(encode_handshake(protocol, info_hash, peer_id))
+        sock.send(encode_handshake(protocol, info_hash, client_id))
         r_pstr, _, r_info_hash, r_peer_id = decode_handshake(sock.recv(1024))
         assert protocol == r_pstr
         assert info_hash == r_info_hash
         print(f"Peer ID: {r_peer_id.hex()}")
 
 
-async def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, peer_id: bytes) -> None:
+async def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, client_id: bytes) -> None:
     infodata = load_metainfo(torrent_file)
     assert infodata is not None
     url, info_hash, pieces_hash, file_name, file_length, piece_length = infodata
@@ -65,12 +65,13 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
     if piece_index >= len(pieces_hash) // 20:
         raise IndexError(f"Piece {piece_index} not found in torrent")
 
-    tracker = Tracker(url, info_hash, file_length, peer_id)
+    tracker = Tracker(url, info_hash, file_length, client_id)
     peers = await tracker.get_peers()
 
     for address in peers:
-        peer = Peer(address, info_hash, peer_id)
+        peer = Peer(address, info_hash, client_id)
         peer_task = peer.run_task()
+
         await peer.initialize_pieces(pieces_hash, file_length, piece_length)
         piece = await peer.get_piece(piece_index)
         peer_task.cancel()
@@ -86,13 +87,13 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
         print(f"Piece {piece_index} not found in any peer")
 
 
-async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None:
+async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> None:
     infodata = load_metainfo(torrent_file)
     assert infodata is not None
     url, info_hash, pieces_hash, file_name, file_length, piece_length = infodata
     num_pieces = len(pieces_hash) // 20
 
-    tracker = Tracker(url, info_hash, file_length, peer_id)
+    tracker = Tracker(url, info_hash, file_length, client_id)
     peers = await tracker.get_peers()
 
     worker_task:dict[tuple[str, int], asyncio.Task[None]] = {}
@@ -110,7 +111,7 @@ async def run_download(out_file: str, torrent_file: str, peer_id: bytes) -> None
 
     async def peer_worker(address: tuple[str, int], piece_index: int) -> None:
         # print("peer", address, "received job", piece_index)
-        peer = Peer(address, info_hash, peer_id)
+        peer = Peer(address, info_hash, client_id)
         peer_task = peer.run_task()
         await peer.initialize_pieces(pieces_hash, file_length, piece_length)
         piece = await peer.get_piece(piece_index)
@@ -150,7 +151,7 @@ async def run_magnet_parse(magnet_link: str) -> None:
     print("Info Hash:", info_hash_str)
 
 
-async def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
+async def run_magnet_handshake(magnet_link: str, client_id: bytes) -> None:
     """
     Test links:
     - magnet1.gif.torrent: magnet:?xt=urn:btih:ad42ce8109f54c99613ce38f9b4d87e70f24a165&dn=magnet1.gif&tr=http%3A%2F%2Fbittorrent-test-tracker.codecrafters.io%2Fannounce
@@ -164,11 +165,11 @@ async def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
 
-    tracker = Tracker(trackers[0], info_hash, unknown_length, peer_id)
+    tracker = Tracker(trackers[0], info_hash, unknown_length, client_id)
     peers = await tracker.get_peers()
     address = peers[0]
 
-    peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
+    peer = Peer(address, info_hash, client_id, extension_reserved, extension_support)
     peer_task = peer.run_task()
 
     await peer.event_extension.wait()
@@ -182,7 +183,7 @@ async def run_magnet_handshake(magnet_link: str, peer_id: bytes) -> None:
     print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
 
 
-async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
+async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
     unknown_length = 1024
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
@@ -190,11 +191,11 @@ async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
 
-    tracker = Tracker(trackers[0], info_hash, unknown_length, peer_id)
+    tracker = Tracker(trackers[0], info_hash, unknown_length, client_id)
     peers = await tracker.get_peers()
     address = peers[0]
 
-    peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
+    peer = Peer(address, info_hash, client_id, extension_reserved, extension_support)
     peer_task = peer.run_task()
 
     await peer.event_metadata.wait()
@@ -221,7 +222,7 @@ async def run_magnet_info(magnet_link: str, peer_id: bytes) -> None:
         print(peer.pieces_hash[piece_index*20:piece_index*20+20].hex())
 
 
-async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, peer_id: bytes) -> None:
+async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, client_id: bytes) -> None:
     unknown_length = 1024
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
@@ -229,11 +230,11 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
 
-    tracker = Tracker(trackers[0], info_hash, unknown_length, peer_id)
+    tracker = Tracker(trackers[0], info_hash, unknown_length, client_id)
     peers = await tracker.get_peers()
 
     for address in peers:
-        peer = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
+        peer = Peer(address, info_hash, client_id, extension_reserved, extension_support)
         peer_task = peer.run_task()
 
         await peer.event_pieces.wait()
@@ -251,7 +252,7 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
         print(f"Piece {piece_index} not found in any peer")
 
 
-async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -> None:
+async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes) -> None:
     unknown_length = 1024
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
@@ -259,7 +260,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -
     _, trackers, info_hash_str = parse_magnet(magnet_link)
     info_hash = bytes.fromhex(info_hash_str)
 
-    tracker = Tracker(trackers[0], info_hash, unknown_length, peer_id)
+    tracker = Tracker(trackers[0], info_hash, unknown_length, client_id)
     addresses = await tracker.get_peers()
 
     peers = {}
@@ -270,7 +271,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -
     workers: queue.Queue[tuple[str, int]] = queue.Queue()
 
     for address in addresses:
-        peers[address] = Peer(address, info_hash, peer_id, extension_reserved, extension_support)
+        peers[address] = Peer(address, info_hash, client_id, extension_reserved, extension_support)
         peers_task[address] = peers[address].run_task()
 
     for address in addresses:
@@ -324,7 +325,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, peer_id: bytes) -
 
 
 
-def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
+def make_parser(client_id: bytes) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.main", description="Basic bittorrent client")
     subparsers = parser.add_subparsers(title="command", description="valid commands", required=True)
 
@@ -350,7 +351,7 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
         help="get peers in torrent tracker and show addresses",
     )
     parser_peers.add_argument("torrent_file", type=str, help="path to torrent file")
-    parser_peers.set_defaults(command_cb=run_peers, peer_id=peer_id)
+    parser_peers.set_defaults(command_cb=run_peers, client_id=client_id)
 
     parser_handshake = subparsers.add_parser(
         "handshake",
@@ -359,7 +360,7 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
     )
     parser_handshake.add_argument("torrent_file", type=str, help="path to torrent file")
     parser_handshake.add_argument("peer_address", type=str, help="address of the peer as <IP>:<PORT>")
-    parser_handshake.set_defaults(command_cb=run_handshake, peer_id=peer_id)
+    parser_handshake.set_defaults(command_cb=run_handshake, client_id=client_id)
 
     parser_piece = subparsers.add_parser(
         "download_piece",
@@ -369,7 +370,7 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
     parser_piece.add_argument("-o", type=str, required=False, dest="piece_file", metavar="piece_file", help="path to piece file (will be overwritten)")
     parser_piece.add_argument("torrent_file", type=str, help="path to torrent file")
     parser_piece.add_argument("piece_index", type=int, help="index of the piece (starting at 0)")
-    parser_piece.set_defaults(command_cb=run_download_piece, peer_id=peer_id)
+    parser_piece.set_defaults(command_cb=run_download_piece, client_id=client_id)
 
     parser_file = subparsers.add_parser(
         "download",
@@ -378,7 +379,7 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
     )
     parser_file.add_argument("-o", type=str, required=False, dest="out_file", metavar="out_file", help="path to file (will be overwritten)")
     parser_file.add_argument("torrent_file", type=str, help="path to torrent file")
-    parser_file.set_defaults(command_cb=run_download, peer_id=peer_id)
+    parser_file.set_defaults(command_cb=run_download, client_id=client_id)
 
     parser_magnet_parse = subparsers.add_parser(
         "magnet_parse",
@@ -394,7 +395,7 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
         help="do handshake with magnet tracker",
     )
     parser_magnet_handshake.add_argument("magnet_link", type=str, help="magnet link")
-    parser_magnet_handshake.set_defaults(command_cb=run_magnet_handshake, peer_id=peer_id)
+    parser_magnet_handshake.set_defaults(command_cb=run_magnet_handshake, client_id=client_id)
 
     parser_magnet_info = subparsers.add_parser(
         "magnet_info",
@@ -402,7 +403,7 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
         help="get torrent information from tracker",
     )
     parser_magnet_info.add_argument("magnet_link", type=str, help="magnet link")
-    parser_magnet_info.set_defaults(command_cb=run_magnet_info, peer_id=peer_id)
+    parser_magnet_info.set_defaults(command_cb=run_magnet_info, client_id=client_id)
 
     parser_magnet_piece = subparsers.add_parser(
         "magnet_download_piece",
@@ -412,7 +413,7 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
     parser_magnet_piece.add_argument("-o", type=str, required=False, dest="piece_file", metavar="piece_file", help="path to piece file (will be overwritten)")
     parser_magnet_piece.add_argument("magnet_link", type=str, help="magnet link")
     parser_magnet_piece.add_argument("piece_index", type=int, help="index of the piece (starting at 0)")
-    parser_magnet_piece.set_defaults(command_cb=run_magnet_piece, peer_id=peer_id)
+    parser_magnet_piece.set_defaults(command_cb=run_magnet_piece, client_id=client_id)
 
     parser_magnet_download = subparsers.add_parser(
         "magnet_download",
@@ -421,15 +422,15 @@ def make_parser(peer_id: bytes) -> argparse.ArgumentParser:
     )
     parser_magnet_download.add_argument("-o", type=str, required=False, dest="out_file", metavar="out_file", help="path to file (will be overwritten)")
     parser_magnet_download.add_argument("magnet_link", type=str, help="magnet link")
-    parser_magnet_download.set_defaults(command_cb=run_magnet_download, peer_id=peer_id)
+    parser_magnet_download.set_defaults(command_cb=run_magnet_download, client_id=client_id)
 
     return parser
 
 
 def main() -> None:
-    peer_id = secrets.token_bytes(20)
+    client_id = secrets.token_bytes(20)
 
-    parser = make_parser(peer_id)
+    parser = make_parser(client_id)
     args = parser.parse_args(sys.argv[1:])
     command_cb = args.command_cb
 
