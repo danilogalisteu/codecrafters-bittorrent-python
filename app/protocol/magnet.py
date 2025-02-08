@@ -10,13 +10,13 @@ def parse_magnet(url: str) -> tuple[str, list[str], str]:
 
     display_name = query["dn"][0] if "dn" in query else ""
     tracker_urls = query.get("tr", [])
-    info_hash = query["xt"][0]
+    info_hash_str = query["xt"][0]
 
-    assert info_hash[:9] == "urn:btih:"
-    info_hash = info_hash[9:]
+    assert info_hash_str[:9] == "urn:btih:"
+    info_hash_str = info_hash_str[9:]
 
-    if len(info_hash) == 32:
-        info_hash = b32decode(info_hash, casefold=True).hex()
-    assert len(info_hash) == 40
+    if len(info_hash_str) == 32:
+        info_hash_str = b32decode(info_hash_str, casefold=True).hex()
+    assert len(info_hash_str) == 40
 
-    return display_name, tracker_urls, info_hash
+    return display_name, tracker_urls, info_hash_str
