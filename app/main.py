@@ -66,13 +66,13 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
         raise IndexError(f"Piece {piece_index} not found in torrent")
 
     tracker = Tracker(url, info_hash, file_length, client_id)
-    peers = await tracker.get_peers()
+    addresses = await tracker.get_peers()
 
-    for address in peers:
-        peer = Peer(address, info_hash, client_id)
+    for address in addresses:
+        peer = Peer(address, tracker.info_hash, client_id)
         peer_task = peer.run_task()
 
-        await peer.initialize_pieces(pieces_hash, file_length, piece_length)
+        await peer.initialize_pieces(tracker.pieces_hash, tracker.file_length, tracker.piece_length)
         piece = await peer.get_piece(piece_index)
         peer_task.cancel()
         if piece is not None:
@@ -94,7 +94,7 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
     num_pieces = len(pieces_hash) // 20
 
     tracker = Tracker(url, info_hash, file_length, client_id)
-    peers = await tracker.get_peers()
+    addresses = await tracker.get_peers()
 
     worker_task:dict[tuple[str, int], asyncio.Task[None]] = {}
     results: dict[int, bytes] = {}
@@ -102,7 +102,7 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
     workers: queue.Queue[tuple[str, int]] = queue.Queue()
 
     # print("adding workers")
-    for address in peers:
+    for address in addresses:
         workers.put(address)
 
     # print("scheduling jobs")
@@ -166,10 +166,9 @@ async def run_magnet_handshake(magnet_link: str, client_id: bytes) -> None:
     info_hash = bytes.fromhex(info_hash_str)
 
     tracker = Tracker(trackers[0], info_hash, unknown_length, client_id)
-    peers = await tracker.get_peers()
-    address = peers[0]
+    addresses = await tracker.get_peers()
 
-    peer = Peer(address, info_hash, client_id, extension_reserved, extension_support)
+    peer = Peer(addresses[0], info_hash, client_id, extension_reserved, extension_support)
     peer_task = peer.run_task()
 
     await peer.event_extension.wait()
@@ -192,10 +191,9 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
     info_hash = bytes.fromhex(info_hash_str)
 
     tracker = Tracker(trackers[0], info_hash, unknown_length, client_id)
-    peers = await tracker.get_peers()
-    address = peers[0]
+    addresses = await tracker.get_peers()
 
-    peer = Peer(address, info_hash, client_id, extension_reserved, extension_support)
+    peer = Peer(addresses[0], info_hash, client_id, extension_reserved, extension_support)
     peer_task = peer.run_task()
 
     await peer.event_metadata.wait()
@@ -231,9 +229,9 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
     info_hash = bytes.fromhex(info_hash_str)
 
     tracker = Tracker(trackers[0], info_hash, unknown_length, client_id)
-    peers = await tracker.get_peers()
+    addresses = await tracker.get_peers()
 
-    for address in peers:
+    for address in addresses:
         peer = Peer(address, info_hash, client_id, extension_reserved, extension_support)
         peer_task = peer.run_task()
 
