@@ -40,7 +40,7 @@ class Tracker:
         self.num_pieces: int | None = None
         self.last_piece_length: int | None = None
 
-    def init_pieces(self, file_name: str, file_length: int, piece_length: int, pieces_hash: bytes):
+    def init_pieces(self, file_name: str, file_length: int, piece_length: int, pieces_hash: bytes) -> None:
         self.file_name = file_name
         self.file_length = file_length
         self.piece_length = piece_length
