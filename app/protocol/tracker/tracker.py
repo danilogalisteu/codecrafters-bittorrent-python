@@ -24,13 +24,13 @@ def peer_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
 
 
 class Tracker:
-    def __init__(self, url: str, info_hash: bytes, file_length: int, client_id: bytes, timeout: float = 1.0) -> None:
+    def __init__(self, url: str, info_hash: bytes, file_length: int, client_id: bytes) -> None:
         self.url = url
         self.info_hash = info_hash
         self.file_length = file_length
         self.client_id = client_id
-        self.timeout = timeout
         self.port: int = 6881
+        self.timeout = 15.0
         self.connection_id: int | None = None
         self.peer_addresses: list[tuple[str, int]] | None = None
         self.interval: int | None = None
@@ -128,17 +128,27 @@ class Tracker:
         )
         self.peer_addresses = peer_list_from_bytes(peers_bytes)
 
-    async def get_peers(self) -> list[tuple[str, int]]:
-        try:
-            async with asyncio.timeout(self.timeout):
-                if self.url.startswith("http"):
-                    await self._get_peers_tcp()
-                elif self.url.startswith("udp"):
-                    await self._get_peers_udp()
+    async def get_peers(self, n_retry_max: int = 9) -> list[tuple[str, int]]:
+        if self.url.startswith("http"):
+            get_peers_cb = self._get_peers_tcp
+        elif self.url.startswith("udp"):
+            get_peers_cb = self._get_peers_udp
+        else:
+            raise ValueError(f"unknown tracker protocol {self.url}")
+
+        n_retry = 0
+        while True:
+            try:
+                async with asyncio.timeout(self.timeout * 2 ** n_retry):
+                    await get_peers_cb()
+                    break
+            except TimeoutError:
+                if n_retry < n_retry_max:
+                    print(f"Tracker '{self.url}' is not responding, trying again...")
+                    n_retry += 1
                 else:
-                    raise ValueError(f"unknown tracker protocol {self.url}")
-        except TimeoutError:
-            print(f"Tracker '{self.url}' is not active...")
+                    print(f"Tracker '{self.url}' is not active...")
+                    break
 
         return self.peer_addresses or []
 
