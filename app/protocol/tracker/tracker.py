@@ -1,3 +1,4 @@
+import asyncio
 from base64 import b32decode
 from typing import Any, Self
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -23,11 +24,12 @@ def peer_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
 
 
 class Tracker:
-    def __init__(self, url: str, info_hash: bytes, file_length: int, client_id: bytes) -> None:
+    def __init__(self, url: str, info_hash: bytes, file_length: int, client_id: bytes, timeout: float = 1.0) -> None:
         self.url = url
         self.info_hash = info_hash
         self.file_length = file_length
         self.client_id = client_id
+        self.timeout = timeout
         self.port: int = 6881
         self.connection_id: int | None = None
         self.peer_addresses: list[tuple[str, int]] | None = None
@@ -127,15 +129,18 @@ class Tracker:
         self.peer_addresses = peer_list_from_bytes(peers_bytes)
 
     async def get_peers(self) -> list[tuple[str, int]]:
-        if self.url.startswith("http"):
-            await self._get_peers_tcp()
-            return self.peer_addresses or []
+        try:
+            async with asyncio.timeout(self.timeout):
+                if self.url.startswith("http"):
+                    await self._get_peers_tcp()
+                elif self.url.startswith("udp"):
+                    await self._get_peers_udp()
+                else:
+                    raise ValueError(f"unknown tracker protocol {self.url}")
+        except TimeoutError:
+            print(f"Tracker '{self.url}' is not active...")
 
-        if self.url.startswith("udp"):
-            await self._get_peers_udp()
-            return self.peer_addresses or []
-
-        raise ValueError(f"unknown tracker protocol {self.url}")
+        return self.peer_addresses or []
 
     def print_peers(self) -> None:
         assert self.peer_addresses is not None
