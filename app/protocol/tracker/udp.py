@@ -21,7 +21,8 @@ class UDPSender(asyncio.DatagramProtocol):
         print("Error received:", exc)
 
     def connection_lost(self, exc: Exception | None) -> None:  # noqa: ARG002
-        self.on_con_lost.set_result(True)
+        if not self.on_con_lost.done():
+            self.on_con_lost.set_result(True)
 
 
 async def send_recv_udp_data(address: tuple[str, int], send_data: bytes) -> bytes:
