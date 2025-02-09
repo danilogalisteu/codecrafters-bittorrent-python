@@ -35,10 +35,7 @@ class UDPEvent(enum.IntEnum):
 async def connect_udp(address: tuple[str, int]) -> int:
     transaction_id = random.randrange(-(2**31), 2**31)
     send_data = struct.pack("!qii", UDP_TRACKER_PROTOCOL_ID, UDPAction.CONNECT.value, transaction_id)
-    recv_data = await send_recv_udp_data(
-        (address[0], int(address[1])),
-        send_data,
-    )
+    recv_data = await send_recv_udp_data(address, send_data)
     assert len(recv_data) >= 16
     recv_action, recv_transaction_id, connection_id = struct.unpack("!iiq", recv_data[:16])
     assert recv_transaction_id == transaction_id
@@ -73,10 +70,7 @@ async def announce_udp(
         -1,
         client_port,
     )
-    recv_data = await send_recv_udp_data(
-        (address[0], int(address[1])),
-        send_data,
-    )
+    recv_data = await send_recv_udp_data(address, send_data)
     assert len(recv_data) >= 20
     recv_action, recv_transaction_id, interval, leechers, seeders = struct.unpack("!iiiii", recv_data[:20])
     assert recv_transaction_id == transaction_id
