@@ -150,75 +150,87 @@ async def run_magnet_handshake(magnet_link: str, client_id: bytes) -> None:
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    tracker = Tracker.from_magnet(magnet_link, client_id)[0]
-    addresses = await tracker.get_peers()
+    addresses = []
+    trackers = Tracker.from_magnet(magnet_link, client_id)
+    for tracker in trackers:
+        addresses.extend(await tracker.get_peers())
 
-    peer = Peer(
-        addresses[0],
-        tracker.info_hash,
-        client_id,
-        extension_reserved,
-        extension_support,
-    )
-    peer_task = peer.run_task()
+    for address in addresses:
+        peer = Peer(
+            address,
+            tracker.info_hash,
+            client_id,
+            extension_reserved,
+            extension_support,
+        )
+        peer_task = peer.run_task()
 
-    await peer.event_extension.wait()
-    print("peer_ext_support", peer.peer_ext_support)
+        await peer.event_extension.wait()
+        print("peer_ext_support", peer.peer_ext_support)
 
-    peer_task.cancel()
+        peer_task.cancel()
 
-    assert peer.peer_id is not None
-    assert peer.peer_ext_support is not None
-    print(f"Peer ID: {peer.peer_id.hex()}")
-    print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
+        assert peer.peer_id is not None
+        assert peer.peer_ext_support is not None
+        print(f"Peer ID: {peer.peer_id.hex()}")
+        print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
+
+        break
 
 
 async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    tracker = Tracker.from_magnet(magnet_link, client_id)[0]
-    addresses = await tracker.get_peers()
+    addresses = []
+    trackers = Tracker.from_magnet(magnet_link, client_id)
+    for tracker in trackers:
+        addresses.extend(await tracker.get_peers())
 
-    peer = Peer(
-        addresses[0],
-        tracker.info_hash,
-        client_id,
-        extension_reserved,
-        extension_support,
-    )
-    peer_task = peer.run_task()
+    for address in addresses:
+        peer = Peer(
+            address,
+            tracker.info_hash,
+            client_id,
+            extension_reserved,
+            extension_support,
+        )
+        peer_task = peer.run_task()
 
-    await peer.event_metadata.wait()
-    print("peer_ext_meta_info", peer.peer_ext_meta_info)
+        await peer.event_metadata.wait()
+        print("peer_ext_meta_info", peer.peer_ext_meta_info)
 
-    peer_task.cancel()
+        peer_task.cancel()
 
-    assert peer.peer_id is not None
-    assert peer.peer_ext_support is not None
-    print("Peer ID:", peer.peer_id.hex())
-    print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
+        assert peer.peer_id is not None
+        assert peer.peer_ext_support is not None
+        print("Peer ID:", peer.peer_id.hex())
+        print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
 
-    assert peer.pieces_hash is not None
-    assert peer.file_length is not None
-    assert peer.piece_length is not None
-    assert peer.num_pieces is not None
-    print("Tracker URL:", tracker.url)
-    print("File name:", peer.file_name)
-    print("Length:", peer.file_length)
-    print("Info Hash:", tracker.info_hash.hex())
-    print("Piece Length:", peer.piece_length)
-    print("Piece Hashes:")
-    for piece_index in range(peer.num_pieces):
-        print(peer.pieces_hash[piece_index * 20 : piece_index * 20 + 20].hex())
+        assert peer.pieces_hash is not None
+        assert peer.file_length is not None
+        assert peer.piece_length is not None
+        assert peer.num_pieces is not None
+        print("Tracker URL:", tracker.url)
+        print("File name:", peer.file_name)
+        print("Length:", peer.file_length)
+        print("Info Hash:", tracker.info_hash.hex())
+        print("Piece Length:", peer.piece_length)
+        print("Piece Hashes:")
+        for piece_index in range(peer.num_pieces):
+            print(peer.pieces_hash[piece_index * 20 : piece_index * 20 + 20].hex())
+
+        break
 
 
 async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, client_id: bytes) -> None:
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    tracker = Tracker.from_magnet(magnet_link, client_id)[0]
-    addresses = await tracker.get_peers()
+    addresses = []
+    trackers = Tracker.from_magnet(magnet_link, client_id)
+    for tracker in trackers:
+        addresses.extend(await tracker.get_peers())
 
     for address in addresses:
         peer = Peer(address, tracker.info_hash, client_id, extension_reserved, extension_support)
@@ -242,8 +254,10 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
     extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    tracker = Tracker.from_magnet(magnet_link, client_id)[0]
-    addresses = await tracker.get_peers()
+    addresses = []
+    trackers = Tracker.from_magnet(magnet_link, client_id)
+    for tracker in trackers:
+        addresses.extend(await tracker.get_peers())
 
     peers = {}
     peers_task = {}
