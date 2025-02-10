@@ -1,7 +1,6 @@
 import asyncio
 import hashlib
 import math
-import queue
 import struct
 from typing import Any
 
@@ -50,8 +49,8 @@ class Peer:
         self._writer: asyncio.StreamWriter | None = None
         self._comm_buffer: bytes = b""
         self._recv_length: int = 1024
-        self._send_queue: queue.Queue[tuple[MsgID, bytes]] = queue.Queue()
-        self._recv_queue: queue.Queue[tuple[int, int, bytes]] = queue.Queue()
+        self._send_queue: asyncio.Queue[tuple[MsgID, bytes]] = asyncio.Queue()
+        self._recv_queue: asyncio.Queue[tuple[int, int, bytes]] = asyncio.Queue()
 
         self.event_am_interested = asyncio.Event()
         self.event_am_unchoke = asyncio.Event()
@@ -95,7 +94,7 @@ class Peer:
         self.supports_extension = ((self.peer_reserved[5] >> 4) & 1) == 1
         if self.supports_extension and self.client_ext_support:
             ext_handshake_payload = b"\x00" + encode_bencode(self.client_ext_support)
-            self._send_queue.put((MsgID.EXTENSION, ext_handshake_payload))
+            await self._send_queue.put((MsgID.EXTENSION, ext_handshake_payload))
         else:
             self.event_extension.set()
 
@@ -122,7 +121,7 @@ class Peer:
                 index = struct.unpack("!I", recv_payload[0:4])[0]
                 begin = struct.unpack("!I", recv_payload[4:8])[0]
                 block = recv_payload[8:]
-                self._recv_queue.put((index, begin, block))
+                await self._recv_queue.put((index, begin, block))
             case MsgID.EXTENSION:
                 ext_id = recv_payload[0]
                 ext_payload = recv_payload[1:]
@@ -135,7 +134,7 @@ class Peer:
                         self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
                         assert self.peer_ext_meta_id is not None
                         meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
-                        self._send_queue.put((MsgID.EXTENSION, self.peer_ext_meta_id.to_bytes(1) + meta_dict))
+                        await self._send_queue.put((MsgID.EXTENSION, self.peer_ext_meta_id.to_bytes(1) + meta_dict))
                     self.event_extension.set()
                 # metadata
                 elif self.peer_ext_meta_id and ext_id == self.client_ext_support["m"]["ut_metadata"]:
@@ -177,7 +176,7 @@ class Peer:
             await asyncio.sleep(0)
             # send one message from queue
             if not self._send_queue.empty():
-                send_id, send_payload = self._send_queue.get()
+                send_id, send_payload = await self._send_queue.get()
                 # print("sending", send_id, MsgID(send_id).name, len(send_payload), send_payload)
                 self._writer.write(encode_message(send_id, send_payload))
                 await self._writer.drain()
@@ -240,7 +239,7 @@ class Peer:
 
         if not self.event_am_interested.is_set():
             self.event_am_interested.set()
-            self._send_queue.put((MsgID.INTERESTED, b""))
+            await self._send_queue.put((MsgID.INTERESTED, b""))
 
         await self.event_am_unchoke.wait()
 
@@ -253,17 +252,19 @@ class Peer:
         current_begin = 0
         while current_begin < piece_length:
             eff_chunk_length = min(chunk_length, piece_length - current_begin)
-            self._send_queue.put((MsgID.REQUEST, struct.pack("!III", piece_index, current_begin, eff_chunk_length)))
+            await self._send_queue.put(
+                (MsgID.REQUEST, struct.pack("!III", piece_index, current_begin, eff_chunk_length)),
+            )
 
             while True:
                 await asyncio.sleep(0)
                 if not self._recv_queue.empty():
-                    r_index, r_begin, r_block = self._recv_queue.get()
+                    r_index, r_begin, r_block = await self._recv_queue.get()
                     if r_index == piece_index and r_begin == current_begin:
                         piece += r_block
                         current_begin += len(r_block)
                         break
-                    self._recv_queue.put((r_index, r_begin, r_block))
+                    await self._recv_queue.put((r_index, r_begin, r_block))
 
         self._recv_length = 1024
 
