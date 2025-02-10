@@ -4,9 +4,10 @@ import queue
 import struct
 from typing import Any
 
-from .bencode import decode_bencode, encode_bencode
+from app.protocol.bencode import decode_bencode, encode_bencode
+
 from .handshake import decode_handshake, encode_handshake
-from .message import MsgID, decode_message, encode_message
+from .messages import MsgID, decode_message, encode_message
 
 
 class Peer:

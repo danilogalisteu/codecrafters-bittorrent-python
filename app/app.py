@@ -6,9 +6,9 @@ from typing import Any
 
 from .protocol import address_str_to_tuple
 from .protocol.bencode import decode_bencode
-from .protocol.handshake import decode_handshake, encode_handshake
 from .protocol.metainfo import load_metainfo
 from .protocol.peer import Peer
+from .protocol.peer.handshake import decode_handshake, encode_handshake
 from .protocol.tracker import Tracker
 
 
