@@ -24,13 +24,13 @@ class Peer:
         self.info_hash = info_hash
         self.client_id = client_id
         self.client_reserved = client_reserved
-        self.client_bitfield: bytes | None = None
+        self.client_bitfield: bytearray | None = None
         self.client_ext_support = client_ext_support
 
         # handshake
         self.peer_id: bytes | None = None
         self.peer_reserved: bytes | None = None
-        self.peer_bitfield: bytes | None = None
+        self.peer_bitfield: bytearray | None = None
 
         self.peer_supports_extension: bool | None = None
         self.peer_ext_support: dict[str | bytes, Any] | None = None
@@ -116,7 +116,7 @@ class Peer:
                 assert len(recv_payload) == 0
                 self.event_is_interested.clear()
             case MsgID.BITFIELD:
-                self.peer_bitfield = recv_payload
+                self.peer_bitfield = bytearray(recv_payload)
                 self.event_bitfield.set()
             case MsgID.PIECE:
                 index = struct.unpack("!I", recv_payload[0:4])[0]
@@ -218,6 +218,7 @@ class Peer:
         self.piece_length = piece_length
         self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
 
+        self.client_bitfield = bytearray((0).to_bytes(math.ceil(self.num_pieces / 8)))
         self.event_pieces.set()
 
     def has_piece(self, piece_index: int) -> bool:
