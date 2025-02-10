@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import math
 import queue
 import struct
 from typing import Any
@@ -63,14 +64,7 @@ class Peer:
         self.event_metadata = asyncio.Event()
         self.event_pieces = asyncio.Event()
 
-    def _client_has_piece(self, piece_index: int) -> bool:
-        if self.client_bitfield is None:
-            return False
-        bitfield_index = piece_index // 8
-        byte_mask = 1 << (7 - piece_index % 8)
-        return (self.client_bitfield[bitfield_index] & byte_mask) != 0
-
-    def _peer_has_piece(self, piece_index: int) -> bool:
+    def get_peer_bitfield(self, piece_index: int) -> bool:
         assert self.peer_bitfield is not None
         bitfield_index = piece_index // 8
         byte_mask = 1 << (7 - piece_index % 8)
@@ -124,9 +118,6 @@ class Peer:
             case MsgID.BITFIELD:
                 self.peer_bitfield = recv_payload
                 self.event_bitfield.set()
-                # if self.client_bitfield is None:
-                #     self.client_bitfield = int(0).to_bytes(len(self.peer_bitfield))
-                # self._send_queue.put((MsgID.BITFIELD, self.client_bitfield))
             case MsgID.PIECE:
                 index = struct.unpack("!I", recv_payload[0:4])[0]
                 begin = struct.unpack("!I", recv_payload[4:8])[0]
@@ -226,7 +217,6 @@ class Peer:
         self.file_length = file_length
         self.piece_length = piece_length
         self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
-        self.peer_pieces = [piece_index for piece_index in range(self.num_pieces) if self._peer_has_piece(piece_index)]
 
         self.event_pieces.set()
 
@@ -236,7 +226,7 @@ class Peer:
             raise ValueError("pieces info not initialized")
         if piece_index < 0 or piece_index >= self.num_pieces:
             return False
-        return piece_index in self.peer_pieces
+        return self.get_peer_bitfield(piece_index)
 
     async def get_piece(self, piece_index: int) -> bytes | None:
         assert self.pieces_hash is not None
