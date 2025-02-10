@@ -217,7 +217,7 @@ class Peer:
         self.piece_length = piece_length
         self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
 
-        self.client_bitfield = bytearray((0).to_bytes(math.ceil(self.num_pieces / 8)))
+        self.client_bitfield = bytearray((0).to_bytes(math.ceil(self.num_pieces / 8), byteorder="big", signed=False))
         self.event_pieces.set()
 
     def has_piece(self, piece_index: int) -> bool:

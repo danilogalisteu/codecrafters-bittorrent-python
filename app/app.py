@@ -147,7 +147,7 @@ async def run_magnet_handshake(magnet_link: str, client_id: bytes) -> None:
     - magnet2.gif.torrent: magnet:?xt=urn:btih:3f994a835e090238873498636b98a3e78d1c34ca&dn=magnet2.gif&tr=http%3A%2F%2Fbittorrent-test-tracker.codecrafters.io%2Fannounce
     - magnet3.gif.torrent: magnet:?xt=urn:btih:c5fb9894bdaba464811b088d806bdd611ba490af&dn=magnet3.gif&tr=http%3A%2F%2Fbittorrent-test-tracker.codecrafters.io%2Fannounce
     """
-    extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
+    extension_reserved = (1 << 20).to_bytes(8, byteorder="big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     addresses = []
@@ -179,7 +179,7 @@ async def run_magnet_handshake(magnet_link: str, client_id: bytes) -> None:
 
 
 async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
-    extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
+    extension_reserved = (1 << 20).to_bytes(8, byteorder="big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     addresses = []
@@ -224,7 +224,7 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
 
 
 async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, client_id: bytes) -> None:
-    extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
+    extension_reserved = (1 << 20).to_bytes(8, byteorder="big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     addresses = []
@@ -251,7 +251,7 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
 
 
 async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes) -> None:
-    extension_reserved = (1 << 20).to_bytes(8, "big", signed=False)
+    extension_reserved = (1 << 20).to_bytes(8, byteorder="big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     addresses = []

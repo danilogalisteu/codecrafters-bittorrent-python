@@ -139,7 +139,7 @@ class Tracker:
         n_retry = 0
         while True:
             try:
-                async with asyncio.timeout(self.timeout * 2 ** n_retry):
+                async with asyncio.timeout(self.timeout * 2**n_retry):
                     await get_peers_cb()
                     break
             except TimeoutError:
