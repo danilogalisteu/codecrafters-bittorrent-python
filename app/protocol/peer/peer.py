@@ -86,6 +86,12 @@ class Peer:
         byte_mask = 1 << (7 - piece_index % 8)
         return (self.peer_bitfield[bitfield_index] & byte_mask) != 0
 
+    def set_peer_bitfield(self, piece_index: int) -> None:
+        assert self.peer_bitfield is not None
+        bitfield_index = piece_index // 8
+        byte_mask = 1 << (7 - piece_index % 8)
+        self.peer_bitfield[bitfield_index] |= byte_mask
+
     async def send_have(self, piece_index: int) -> None:
         await self._send_queue.put((MsgID.HAVE, piece_index.to_bytes(4, byteorder="big", signed=False)))
 
@@ -142,6 +148,9 @@ class Peer:
             case MsgID.NOTINTERESTED:
                 assert len(recv_payload) == 0
                 self.event_is_interested.clear()
+            case MsgID.HAVE:
+                piece_index = struct.unpack("!I", recv_payload[0:4])[0]
+                self.set_peer_bitfield(piece_index)
             case MsgID.BITFIELD:
                 self.peer_bitfield = bytearray(recv_payload)
                 self.event_bitfield.set()
