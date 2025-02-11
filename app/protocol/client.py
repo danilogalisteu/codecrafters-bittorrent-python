@@ -24,6 +24,9 @@ class Client:
         self.num_pieces: int | None = None
 
         self.trackers: list[Tracker] | None = None
+        self.peer_addresses: set[tuple[str, int]] | None = None
+        self.peers: dict[tuple[str, int], Peer] = {}
+
         self.event_pieces = asyncio.Event()
 
     def init_pieces(self, file_name: str, file_length: int, piece_length: int, pieces_hash: bytes) -> None:
@@ -54,3 +57,19 @@ class Client:
         client = cls(trackers[0].info_hash, client_id)
         client.trackers = trackers
         return client
+
+    async def get_peers(self) -> None:
+        if self.peer_addresses is None:
+            self.peer_addresses = set()
+        if self.trackers is not None:
+            for addresses in await asyncio.gather(*[tracker.get_peers() for tracker in self.trackers]):
+                self.peer_addresses.update(addresses)
+
+    async def init_peers(self) -> None:
+        if self.peer_addresses is None:
+            self.peer_addresses = set()
+            await self.get_peers()
+
+        for address in self.peer_addresses:
+            if self.peers.get(address, None) is None:
+                self.peers[address] = Peer(address, self.info_hash, self.client_id).run_task()
