@@ -58,6 +58,12 @@ class Client:
         client.trackers = trackers
         return client
 
+    def set_bitfield(self, piece_index: int) -> None:
+        assert self.client_bitfield is not None
+        bitfield_index = piece_index // 8
+        byte_mask = 1 << (7 - piece_index % 8)
+        self.client_bitfield[bitfield_index] |= byte_mask
+
     async def get_peers(self) -> None:
         if self.peer_addresses is None:
             self.peer_addresses = set()
@@ -102,6 +108,7 @@ class Client:
                 piece = await peer.get_piece(piece_index)
                 if piece is not None:
                     self.pieces[piece_index] = piece
+                    self.set_bitfield(piece_index)
                     break
 
         if piece_index in self.pieces:
