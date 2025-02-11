@@ -62,22 +62,19 @@ class Peer:
         self.event_metadata = asyncio.Event()
         self.event_pieces = asyncio.Event()
 
-    async def init_pieces(
+    def init_pieces(
         self,
         file_name: str,
         file_length: int,
         piece_length: int,
         pieces_hash: bytes,
     ) -> None:
-        await self.event_bitfield.wait()
-
         self.file_name = file_name
         self.pieces_hash = pieces_hash
         self.num_pieces = len(self.pieces_hash) // 20
         self.file_length = file_length
         self.piece_length = piece_length
         self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
-
         self.event_pieces.set()
 
     def get_bitfield_piece(self, piece_index: int) -> bool:
@@ -178,7 +175,7 @@ class Peer:
             peer_meta_dict, payload_counter = decode_bencode(ext_payload)
             if peer_meta_dict["msg_type"] == 1 and payload_counter < payload_length:
                 self.peer_ext_meta_info, _ = decode_bencode(ext_payload, payload_counter)
-                await self.init_pieces(
+                self.init_pieces(
                     self.peer_ext_meta_info["name"],
                     self.peer_ext_meta_info["length"],
                     self.peer_ext_meta_info["piece length"],
