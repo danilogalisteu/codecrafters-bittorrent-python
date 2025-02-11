@@ -127,7 +127,7 @@ class Client:
 
     async def get_piece(self, piece_index: int) -> bool:
         for peer in self.peers.values():
-            if peer.has_piece(piece_index):
+            if peer.get_bitfield_piece(piece_index):
                 piece = await peer.get_piece(piece_index)
                 if piece is not None:
                     self.pieces[piece_index] = piece

@@ -80,13 +80,13 @@ class Peer:
 
         self.event_pieces.set()
 
-    def get_peer_bitfield(self, piece_index: int) -> bool:
+    def get_bitfield_piece(self, piece_index: int) -> bool:
         assert self.peer_bitfield is not None
         bitfield_index = piece_index // 8
         byte_mask = 1 << (7 - piece_index % 8)
         return (self.peer_bitfield[bitfield_index] & byte_mask) != 0
 
-    def set_peer_bitfield(self, piece_index: int) -> None:
+    def set_bitfield_piece(self, piece_index: int) -> None:
         assert self.peer_bitfield is not None
         bitfield_index = piece_index // 8
         byte_mask = 1 << (7 - piece_index % 8)
@@ -131,14 +131,6 @@ class Peer:
 
     async def send_extension(self, ext_id: int, ext_payload: bytes) -> None:
         await self._send_queue.put((MsgID.EXTENSION, struct.pack(f"!B{len(ext_payload)}s", ext_id, ext_payload)))
-
-    def has_piece(self, piece_index: int) -> bool:
-        assert self.num_pieces is not None
-        if not self.event_pieces.is_set():
-            raise ValueError("pieces info not initialized")
-        if piece_index < 0 or piece_index >= self.num_pieces:
-            return False
-        return self.get_peer_bitfield(piece_index)
 
     async def _handshake(self) -> None:
         assert self._reader is not None
@@ -216,7 +208,7 @@ class Peer:
             case MsgID.HAVE:
                 assert len(recv_payload) == 4
                 piece_index = struct.unpack("!I", recv_payload[0:4])[0]
-                self.set_peer_bitfield(piece_index)
+                self.set_bitfield_piece(piece_index)
             case MsgID.BITFIELD:
                 self.peer_bitfield = bytearray(recv_payload)
                 self.event_bitfield.set()
@@ -298,7 +290,11 @@ class Peer:
         assert self.piece_length is not None
         assert self.last_piece_length is not None
 
-        if not self.has_piece(piece_index):
+        if (
+            (not self.event_pieces.is_set())
+            or (piece_index < 0 or piece_index >= self.num_pieces)
+            or (not self.get_bitfield_piece(piece_index))
+        ):
             return None
 
         if not self.event_am_interested.is_set():
