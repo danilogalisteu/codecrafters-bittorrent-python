@@ -17,15 +17,15 @@ class MsgID(IntEnum):
     EXTENSION = 20
 
 
-def encode_message(send_id: int | None = None, payload: bytes = b"") -> bytes:
+def encode_message(send_id: int, payload: bytes = b"") -> bytes:
+    if send_id == MsgID.KEEPALIVE:
+        return struct.pack("!I", 0)
+
+    if send_id in (MsgID.CHOKE, MsgID.UNCHOKE, MsgID.INTERESTED, MsgID.NOTINTERESTED):
+        return struct.pack("!IB", 1, send_id)
+
     payload_length = len(payload)
-    buffer = bytearray(4 + (1 if send_id else 0) + payload_length)
-    buffer[:4] = struct.pack("!I", (1 if send_id else 0) + payload_length)
-    if send_id:
-        buffer[4] = send_id
-    if payload_length > 0:
-        buffer[5:] = payload
-    return buffer
+    return struct.pack(f"!IB{payload_length}s", 1 + payload_length, send_id, payload)
 
 
 def decode_message(buffer: bytes) -> tuple[int, bytes, bytes]:
@@ -34,15 +34,15 @@ def decode_message(buffer: bytes) -> tuple[int, bytes, bytes]:
     if len_buffer < 4:
         # Signal incomplete message
         raise IndexError
-    payload_length = struct.unpack("!I", buffer[:4])[0]
 
+    payload_length = struct.unpack("!I", buffer[:4])[0]
     if payload_length > len_buffer - 4:
         # Signal incomplete message
         raise IndexError
 
-    recv_id, payload = -1, b""
+    recv_id, payload = MsgID.KEEPALIVE, b""
     if payload_length > 0:
-        recv_id = buffer[4]
+        recv_id = MsgID(buffer[4])
     if payload_length > 1:
         payload = buffer[5 : 4 + payload_length]
 
