@@ -123,7 +123,7 @@ class Client:
         assert self.piece_length is not None
         assert self.pieces_hash is not None
         for peer in self.peers.values():
-            await peer.init_pieces(self.pieces_hash, self.file_length, self.piece_length, self.file_name)
+            await peer.init_pieces(self.file_name, self.file_length, self.piece_length, self.pieces_hash)
 
     async def get_piece(self, piece_index: int) -> bool:
         for peer in self.peers.values():

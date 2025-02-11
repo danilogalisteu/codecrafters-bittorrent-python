@@ -64,10 +64,10 @@ class Peer:
 
     async def init_pieces(
         self,
-        pieces_hash: bytes,
+        file_name: str,
         file_length: int,
         piece_length: int,
-        file_name: str = "",
+        pieces_hash: bytes,
     ) -> None:
         await self.event_bitfield.wait()
 
@@ -183,10 +183,10 @@ class Peer:
                     if peer_meta_dict["msg_type"] == 1 and payload_counter < payload_length:
                         self.peer_ext_meta_info, _ = decode_bencode(ext_payload, payload_counter)
                         await self.init_pieces(
-                            self.peer_ext_meta_info["pieces"],
+                            self.peer_ext_meta_info["name"],
                             self.peer_ext_meta_info["length"],
                             self.peer_ext_meta_info["piece length"],
-                            self.peer_ext_meta_info["name"],
+                            self.peer_ext_meta_info["pieces"],
                         )
                         self.event_metadata.set()
                 # unexpected
