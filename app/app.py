@@ -6,8 +6,8 @@ from typing import Any
 
 from .protocol import address_str_to_tuple
 from .protocol.bencode import decode_bencode
+from .protocol.client import Client
 from .protocol.metainfo import load_metainfo
-from .protocol.peer import Peer
 from .protocol.peer.handshake import decode_handshake, encode_handshake
 from .protocol.tracker import Tracker
 
@@ -55,81 +55,32 @@ async def run_handshake(torrent_file: str, peer_address: str, client_id: bytes) 
 
 
 async def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, client_id: bytes) -> None:
-    tracker = Tracker.from_torrent(torrent_file, client_id)
-    assert tracker.pieces_hash is not None
-    assert tracker.piece_length is not None
+    client = Client.from_torrent(torrent_file, client_id)
+    await client.wait_pieces()
 
-    addresses = await tracker.get_peers()
-    for address in addresses:
-        peer = Peer(address, tracker.info_hash, client_id).run_task()
-
-        await peer.init_pieces(tracker.pieces_hash, tracker.file_length, tracker.piece_length)
-        piece = await peer.get_piece(piece_index)
-        peer.cancel_task()
-        if piece is not None:
+    while True:
+        await asyncio.sleep(0)
+        if await client.get_piece(piece_index):
             break
 
-    if piece is not None:
-        if tracker.file_name and not piece_file:
-            piece_file = tracker.file_name + f"_piece{piece_index}"
-        await asyncio.to_thread(stdlib_write, piece, piece_file, "wb")
-    else:
-        print(f"Piece {piece_index} not found in any peer")
+    if client.file_name and not piece_file:
+        piece_file = client.file_name + f"_piece{piece_index}"
+    await asyncio.to_thread(stdlib_write, client.pieces[piece_index], piece_file, "wb")
 
 
 async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> None:
-    tracker = Tracker.from_torrent(torrent_file, client_id)
-    assert tracker.pieces_hash is not None
-    assert tracker.piece_length is not None
-
-    worker_task: dict[tuple[str, int], asyncio.Task[None]] = {}
-    results: dict[int, bytes] = {}
-    jobs: asyncio.Queue[int] = asyncio.Queue()
-    workers: asyncio.Queue[tuple[str, int]] = asyncio.Queue()
-
-    # print("adding workers")
-    addresses = await tracker.get_peers()
-    for address in addresses:
-        await workers.put(address)
-
-    # print("scheduling jobs")
-    num_pieces = len(tracker.pieces_hash) // 20
-    for piece_index in range(num_pieces):
-        await jobs.put(piece_index)
-
-    async def peer_worker(tracker: Tracker, address: tuple[str, int], piece_index: int) -> None:
-        assert tracker.pieces_hash is not None
-        assert tracker.piece_length is not None
-        # print("peer", address, "received job", piece_index)
-        peer = Peer(address, tracker.info_hash, client_id).run_task()
-        await peer.init_pieces(tracker.pieces_hash, tracker.file_length, tracker.piece_length)
-        piece = await peer.get_piece(piece_index)
-        peer.cancel_task()
-        if piece is not None:
-            results[piece_index] = piece
-            jobs.task_done()
-            # print("peer", address, "finished job", piece_index)
-        await workers.put(address)
-        worker_task[address].cancel()
-        del worker_task[address]
+    client = Client.from_torrent(torrent_file, client_id)
+    await client.wait_pieces()
 
     while True:
-        if len(results) == num_pieces:
-            break
-        if not jobs.empty():
-            piece_index = await jobs.get()
-            address = await workers.get()
-            worker_task[address] = asyncio.create_task(peer_worker(tracker, address, piece_index))
         await asyncio.sleep(0)
+        if await client.get_all():
+            break
 
-    missing_pieces = [piece_index for piece_index in range(num_pieces) if piece_index not in results]
-    if missing_pieces:
-        print("Some pieces are missing:", ", ".join(map(str, missing_pieces)))
-    else:
-        if tracker.file_name and not out_file:
-            out_file = tracker.file_name
-        for piece_index in sorted(results):
-            await asyncio.to_thread(stdlib_write, results[piece_index], out_file, "ab")
+    if client.file_name and not out_file:
+        out_file = client.file_name
+    for piece_index in sorted(client.pieces):
+        await asyncio.to_thread(stdlib_write, client.pieces[piece_index], out_file, "ab")
 
 
 async def run_magnet_parse(magnet_link: str) -> None:
@@ -148,24 +99,12 @@ async def run_magnet_handshake(magnet_link: str, client_id: bytes) -> None:
     extension_reserved = (1 << 20).to_bytes(8, byteorder="big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    addresses = []
-    trackers = Tracker.from_magnet(magnet_link, client_id)
-    for tracker in trackers:
-        addresses.extend(await tracker.get_peers())
+    client = Client.from_magnet(magnet_link, client_id, extension_reserved, extension_support)
+    await client.wait_pieces()
 
-    for address in addresses:
-        peer = Peer(
-            address,
-            tracker.info_hash,
-            client_id,
-            extension_reserved,
-            extension_support,
-        ).run_task()
-
+    for peer in client.peers.values():
         await peer.event_extension.wait()
         print("peer_ext_support", peer.peer_ext_support)
-
-        peer.cancel_task()
 
         assert peer.peer_id is not None
         assert peer.peer_ext_support is not None
@@ -179,24 +118,12 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
     extension_reserved = (1 << 20).to_bytes(8, byteorder="big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    addresses = []
-    trackers = Tracker.from_magnet(magnet_link, client_id)
-    for tracker in trackers:
-        addresses.extend(await tracker.get_peers())
+    client = Client.from_magnet(magnet_link, client_id, extension_reserved, extension_support)
+    await client.wait_pieces()
 
-    for address in addresses:
-        peer = Peer(
-            address,
-            tracker.info_hash,
-            client_id,
-            extension_reserved,
-            extension_support,
-        ).run_task()
-
+    for peer in client.peers.values():
         await peer.event_metadata.wait()
         print("peer_ext_meta_info", peer.peer_ext_meta_info)
-
-        peer.cancel_task()
 
         assert peer.peer_id is not None
         assert peer.peer_ext_support is not None
@@ -207,10 +134,11 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
         assert peer.file_length is not None
         assert peer.piece_length is not None
         assert peer.num_pieces is not None
-        print("Tracker URL:", tracker.url)
+        assert client.trackers is not None
+        print("Tracker URL:", client.trackers[0].url)
         print("File name:", peer.file_name)
         print("Length:", peer.file_length)
-        print("Info Hash:", tracker.info_hash.hex())
+        print("Info Hash:", client.info_hash.hex())
         print("Piece Length:", peer.piece_length)
         print("Piece Hashes:")
         for piece_index in range(peer.num_pieces):
@@ -223,90 +151,32 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
     extension_reserved = (1 << 20).to_bytes(8, byteorder="big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    addresses = []
-    trackers = Tracker.from_magnet(magnet_link, client_id)
-    for tracker in trackers:
-        addresses.extend(await tracker.get_peers())
+    client = Client.from_magnet(magnet_link, client_id, extension_reserved, extension_support)
+    await client.wait_pieces()
 
-    for address in addresses:
-        peer = Peer(address, tracker.info_hash, client_id, extension_reserved, extension_support).run_task()
-
-        await peer.event_pieces.wait()
-        piece = await peer.get_piece(piece_index)
-        peer.cancel_task()
-        if piece is not None:
+    while True:
+        await asyncio.sleep(0)
+        if await client.get_piece(piece_index):
             break
 
-    if piece is not None:
-        if peer.file_name and not piece_file:
-            piece_file = peer.file_name + f"_piece{piece_index}"
-        await asyncio.to_thread(stdlib_write, piece, piece_file, "wb")
-    else:
-        print(f"Piece {piece_index} not found in any peer")
+    if client.file_name and not piece_file:
+        piece_file = client.file_name + f"_piece{piece_index}"
+    await asyncio.to_thread(stdlib_write, client.pieces[piece_index], piece_file, "wb")
 
 
 async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes) -> None:
     extension_reserved = (1 << 20).to_bytes(8, byteorder="big", signed=False)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
-    addresses = []
-    trackers = Tracker.from_magnet(magnet_link, client_id)
-    for tracker in trackers:
-        addresses.extend(await tracker.get_peers())
-
-    peers = {}
-    worker_task: dict[tuple[str, int], asyncio.Task[None]] = {}
-    results: dict[int, bytes] = {}
-    jobs: asyncio.Queue[int] = asyncio.Queue()
-    workers: asyncio.Queue[tuple[str, int]] = asyncio.Queue()
-
-    for address in addresses:
-        peers[address] = Peer(address, tracker.info_hash, client_id, extension_reserved, extension_support).run_task()
-
-    for address in addresses:
-        await peers[address].event_pieces.wait()
-
-    num_pieces = peers[addresses[0]].num_pieces
-    assert num_pieces is not None
-
-    # print("adding workers")
-    for address in peers:
-        await workers.put(address)
-
-    # print("scheduling jobs")
-    for piece_index in range(num_pieces):
-        await jobs.put(piece_index)
-
-    async def peer_worker(address: tuple[str, int], piece_index: int) -> None:
-        # print("peer", address, "received job", piece_index)
-        peer = peers[address]
-        piece = await peer.get_piece(piece_index)
-        if piece is not None:
-            results[piece_index] = piece
-            jobs.task_done()
-            # print("peer", address, "finished job", piece_index)
-        await workers.put(address)
-        worker_task[address].cancel()
-        del worker_task[address]
+    client = Client.from_magnet(magnet_link, client_id, extension_reserved, extension_support)
+    await client.wait_pieces()
 
     while True:
-        if len(results) == num_pieces:
-            break
-        if not jobs.empty():
-            piece_index = await jobs.get()
-            address = await workers.get()
-            worker_task[address] = asyncio.create_task(peer_worker(address, piece_index))
         await asyncio.sleep(0)
+        if await client.get_all():
+            break
 
-    for address in addresses:
-        peers[address].cancel_task()
-
-    missing_pieces = [piece_index for piece_index in range(num_pieces) if piece_index not in results]
-    if missing_pieces:
-        print("Some pieces are missing:", ", ".join(map(str, missing_pieces)))
-    else:
-        file_name = peers[addresses[0]].file_name
-        if file_name and not out_file:
-            out_file = file_name
-        for piece_index in sorted(results):
-            await asyncio.to_thread(stdlib_write, results[piece_index], out_file, "ab")
+    if client.file_name and not out_file:
+        out_file = client.file_name
+    for piece_index in sorted(client.pieces):
+        await asyncio.to_thread(stdlib_write, client.pieces[piece_index], out_file, "ab")
