@@ -1,6 +1,6 @@
 import asyncio
 import math
-from typing import Self
+from typing import Any, Self
 
 from .peer import Peer
 from .tracker import Tracker
@@ -11,9 +11,13 @@ class Client:
         self,
         info_hash: bytes,
         client_id: bytes,
+        client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
+        client_ext_support: dict[str | bytes, Any] | None = None,
     ) -> None:
         self.info_hash = info_hash
         self.client_id = client_id
+        self.client_reserved = client_reserved
+        self.client_ext_support = client_ext_support
         self.client_bitfield: bytearray | None = None
 
         self.file_name: str | None = None
@@ -41,9 +45,15 @@ class Client:
         self.event_pieces.set()
 
     @classmethod
-    def from_torrent(cls, torrent_file: str, client_id: bytes) -> Self:
+    def from_torrent(
+        cls,
+        torrent_file: str,
+        client_id: bytes,
+        client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
+        client_ext_support: dict[str | bytes, Any] | None = None,
+    ) -> Self:
         tracker = Tracker.from_torrent(torrent_file, client_id)
-        client = cls(tracker.info_hash, client_id)
+        client = cls(tracker.info_hash, client_id, client_reserved, client_ext_support)
         client.trackers = [tracker]
         assert tracker.file_name is not None
         assert tracker.piece_length is not None
@@ -52,9 +62,16 @@ class Client:
         return client
 
     @classmethod
-    def from_magnet(cls, magnet_link: str, client_id: bytes, unknown_length: int = 1024) -> Self:
+    def from_magnet(
+        cls,
+        magnet_link: str,
+        client_id: bytes,
+        client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
+        client_ext_support: dict[str | bytes, Any] | None = None,
+        unknown_length: int = 1024,
+    ) -> Self:
         trackers = Tracker.from_magnet(magnet_link, client_id, unknown_length=unknown_length)
-        client = cls(trackers[0].info_hash, client_id)
+        client = cls(trackers[0].info_hash, client_id, client_reserved, client_ext_support)
         client.trackers = trackers
         return client
 
@@ -78,7 +95,13 @@ class Client:
 
         for address in self.peer_addresses:
             if self.peers.get(address, None) is None:
-                self.peers[address] = Peer(address, self.info_hash, self.client_id).run_task()
+                self.peers[address] = Peer(
+                    address,
+                    self.info_hash,
+                    self.client_id,
+                    self.client_reserved,
+                    self.client_ext_support,
+                ).run_task()
 
     async def wait_pieces(self) -> None:
         if self.peer_addresses is None:
