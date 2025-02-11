@@ -95,3 +95,18 @@ class Client:
         assert self.pieces_hash is not None
         for peer in self.peers.values():
             await peer.init_pieces(self.pieces_hash, self.file_length, self.piece_length, self.file_name)
+
+    async def get_piece(self, piece_index: int) -> bool:
+        for peer in self.peers.values():
+            if peer.has_piece(piece_index):
+                piece = await peer.get_piece(piece_index)
+                if piece is not None:
+                    self.pieces[piece_index] = piece
+                    break
+
+        if piece_index in self.pieces:
+            for peer in self.peers.values():
+                if peer.event_pieces.is_set():
+                    await peer.send_have(piece_index)
+
+        return piece_index in self.pieces
