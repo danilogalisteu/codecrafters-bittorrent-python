@@ -86,6 +86,9 @@ class Peer:
         byte_mask = 1 << (7 - piece_index % 8)
         return (self.peer_bitfield[bitfield_index] & byte_mask) != 0
 
+    async def send_have(self, piece_index: int) -> None:
+        await self._send_queue.put((MsgID.HAVE, piece_index.to_bytes(4, byteorder="big", signed=False)))
+
     def has_piece(self, piece_index: int) -> bool:
         assert self.num_pieces is not None
         if not self.event_pieces.is_set():
