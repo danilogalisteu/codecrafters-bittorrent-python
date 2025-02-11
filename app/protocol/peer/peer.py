@@ -1,6 +1,5 @@
 import asyncio
 import hashlib
-import math
 import struct
 from typing import Any, Self
 
@@ -23,7 +22,6 @@ class Peer:
         self.info_hash = info_hash
         self.client_id = client_id
         self.client_reserved = client_reserved
-        self.client_bitfield: bytearray | None = None
         self.client_ext_support = client_ext_support
 
         # handshake
@@ -80,7 +78,6 @@ class Peer:
         self.piece_length = piece_length
         self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
 
-        self.client_bitfield = bytearray((0).to_bytes(math.ceil(self.num_pieces / 8), byteorder="big", signed=False))
         self.event_pieces.set()
 
     def get_peer_bitfield(self, piece_index: int) -> bool:
