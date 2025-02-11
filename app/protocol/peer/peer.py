@@ -129,8 +129,8 @@ class Peer:
     async def send_port(self, port: int) -> None:
         await self._send_queue.put((MsgID.PORT, struct.pack("!H", port)))
 
-    async def send_extension(self, ext_id: int, payload: bytes) -> None:
-        await self._send_queue.put((MsgID.EXTENSION, struct.pack(f"!B{len(payload)}s", ext_id, payload)))
+    async def send_extension(self, ext_id: int, ext_payload: bytes) -> None:
+        await self._send_queue.put((MsgID.EXTENSION, struct.pack(f"!B{len(ext_payload)}s", ext_id, ext_payload)))
 
     def has_piece(self, piece_index: int) -> bool:
         assert self.num_pieces is not None
@@ -168,6 +168,34 @@ class Peer:
             await self._send_queue.put((MsgID.EXTENSION, ext_handshake_payload))
         else:
             self.event_extension.set()
+
+    async def _parse_extension(self, ext_id: int, ext_payload: bytes) -> None:
+        # handshake
+        if ext_id == 0:
+            payload = decode_bencode(ext_payload)[0]
+            assert isinstance(payload, dict)
+            self.peer_ext_support = payload
+            if "ut_metadata" in self.peer_ext_support["m"]:
+                self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
+                assert isinstance(self.peer_ext_meta_id, int)
+                await self.send_extension(self.peer_ext_meta_id, encode_bencode({"msg_type": 0, "piece": 0}))
+            self.event_extension.set()
+        # metadata
+        elif self.peer_ext_meta_id and ext_id == self.peer_ext_meta_id:
+            payload_length = len(ext_payload)
+            peer_meta_dict, payload_counter = decode_bencode(ext_payload)
+            if peer_meta_dict["msg_type"] == 1 and payload_counter < payload_length:
+                self.peer_ext_meta_info, _ = decode_bencode(ext_payload, payload_counter)
+                await self.init_pieces(
+                    self.peer_ext_meta_info["name"],
+                    self.peer_ext_meta_info["length"],
+                    self.peer_ext_meta_info["piece length"],
+                    self.peer_ext_meta_info["pieces"],
+                )
+                self.event_metadata.set()
+        # unexpected
+        else:
+            print("unexpected peer ext msg id", ext_id, ext_payload)
 
     async def _parse_message(self, recv_id: int, recv_payload: bytes) -> None:
         match recv_id:
@@ -210,35 +238,7 @@ class Peer:
                 # port = struct.unpack("!H", recv_payload)
             case MsgID.EXTENSION:
                 assert len(recv_payload) > 1
-                ext_id = recv_payload[0]
-                ext_payload = recv_payload[1:]
-                # handshake
-                if ext_id == 0:
-                    payload = decode_bencode(ext_payload)[0]
-                    assert isinstance(payload, dict)
-                    self.peer_ext_support = payload
-                    if "ut_metadata" in self.peer_ext_support["m"]:
-                        self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
-                        assert isinstance(self.peer_ext_meta_id, int)
-                        await self.send_extension(self.peer_ext_meta_id, encode_bencode({"msg_type": 0, "piece": 0}))
-                    self.event_extension.set()
-                # metadata
-                elif self.peer_ext_meta_id and ext_id == self.peer_ext_meta_id:
-                    payload_length = len(ext_payload)
-                    peer_meta_dict, payload_counter = decode_bencode(ext_payload)
-                    if peer_meta_dict["msg_type"] == 1 and payload_counter < payload_length:
-                        self.peer_ext_meta_info, _ = decode_bencode(ext_payload, payload_counter)
-                        await self.init_pieces(
-                            self.peer_ext_meta_info["name"],
-                            self.peer_ext_meta_info["length"],
-                            self.peer_ext_meta_info["piece length"],
-                            self.peer_ext_meta_info["pieces"],
-                        )
-                        self.event_metadata.set()
-                # unexpected
-                else:
-                    print("unexpected peer ext msg id", ext_id, ext_payload)
-
+                await self._parse_extension(recv_payload[0], recv_payload[1:])
             case _:
                 print("unexpected peer msg id", recv_id, MsgID(recv_id).name, len(recv_payload), recv_payload)
 
