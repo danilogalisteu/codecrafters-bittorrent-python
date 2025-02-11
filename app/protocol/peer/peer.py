@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import math
 import struct
-from typing import Any
+from typing import Any, Self
 
 from app.protocol.bencode import decode_bencode, encode_bencode
 
@@ -40,9 +40,10 @@ class Peer:
         self.file_length: int | None = None
         self.piece_length: int | None = None
         self.pieces_hash: bytes | None = None
-        self.num_pieces: int | None = None
         self.last_piece_length: int | None = None
+        self.num_pieces: int | None = None
 
+        self._task: asyncio.Task[None] | None = None
         self._running: bool = False
         self._abort: bool = False
         self._reader: asyncio.StreamReader | None = None
@@ -195,8 +196,13 @@ class Peer:
 
         self._running = False
 
-    def run_task(self) -> asyncio.Task[None]:
-        return asyncio.create_task(self._comm_task())
+    def run_task(self) -> Self:
+        self._task = asyncio.create_task(self._comm_task())
+        return self
+
+    def cancel_task(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
 
     def abort(self) -> None:
         self._abort = True

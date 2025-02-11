@@ -61,12 +61,11 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
 
     addresses = await tracker.get_peers()
     for address in addresses:
-        peer = Peer(address, tracker.info_hash, client_id)
-        peer_task = peer.run_task()
+        peer = Peer(address, tracker.info_hash, client_id).run_task()
 
         await peer.initialize_pieces(tracker.pieces_hash, tracker.file_length, tracker.piece_length)
         piece = await peer.get_piece(piece_index)
-        peer_task.cancel()
+        peer.cancel_task()
         if piece is not None:
             break
 
@@ -102,11 +101,10 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
         assert tracker.pieces_hash is not None
         assert tracker.piece_length is not None
         # print("peer", address, "received job", piece_index)
-        peer = Peer(address, tracker.info_hash, client_id)
-        peer_task = peer.run_task()
+        peer = Peer(address, tracker.info_hash, client_id).run_task()
         await peer.initialize_pieces(tracker.pieces_hash, tracker.file_length, tracker.piece_length)
         piece = await peer.get_piece(piece_index)
-        peer_task.cancel()
+        peer.cancel_task()
         if piece is not None:
             results[piece_index] = piece
             jobs.task_done()
@@ -162,13 +160,12 @@ async def run_magnet_handshake(magnet_link: str, client_id: bytes) -> None:
             client_id,
             extension_reserved,
             extension_support,
-        )
-        peer_task = peer.run_task()
+        ).run_task()
 
         await peer.event_extension.wait()
         print("peer_ext_support", peer.peer_ext_support)
 
-        peer_task.cancel()
+        peer.cancel_task()
 
         assert peer.peer_id is not None
         assert peer.peer_ext_support is not None
@@ -194,13 +191,12 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
             client_id,
             extension_reserved,
             extension_support,
-        )
-        peer_task = peer.run_task()
+        ).run_task()
 
         await peer.event_metadata.wait()
         print("peer_ext_meta_info", peer.peer_ext_meta_info)
 
-        peer_task.cancel()
+        peer.cancel_task()
 
         assert peer.peer_id is not None
         assert peer.peer_ext_support is not None
@@ -233,12 +229,11 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
         addresses.extend(await tracker.get_peers())
 
     for address in addresses:
-        peer = Peer(address, tracker.info_hash, client_id, extension_reserved, extension_support)
-        peer_task = peer.run_task()
+        peer = Peer(address, tracker.info_hash, client_id, extension_reserved, extension_support).run_task()
 
         await peer.event_pieces.wait()
         piece = await peer.get_piece(piece_index)
-        peer_task.cancel()
+        peer.cancel_task()
         if piece is not None:
             break
 
@@ -260,15 +255,13 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
         addresses.extend(await tracker.get_peers())
 
     peers = {}
-    peers_task = {}
     worker_task: dict[tuple[str, int], asyncio.Task[None]] = {}
     results: dict[int, bytes] = {}
     jobs: asyncio.Queue[int] = asyncio.Queue()
     workers: asyncio.Queue[tuple[str, int]] = asyncio.Queue()
 
     for address in addresses:
-        peers[address] = Peer(address, tracker.info_hash, client_id, extension_reserved, extension_support)
-        peers_task[address] = peers[address].run_task()
+        peers[address] = Peer(address, tracker.info_hash, client_id, extension_reserved, extension_support).run_task()
 
     for address in addresses:
         await peers[address].event_pieces.wait()
@@ -306,7 +299,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
         await asyncio.sleep(0)
 
     for address in addresses:
-        peers_task[address].cancel()
+        peers[address].cancel_task()
 
     missing_pieces = [piece_index for piece_index in range(num_pieces) if piece_index not in results]
     if missing_pieces:
