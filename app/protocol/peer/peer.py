@@ -64,11 +64,38 @@ class Peer:
         self.event_metadata = asyncio.Event()
         self.event_pieces = asyncio.Event()
 
+    async def init_pieces(
+        self,
+        pieces_hash: bytes,
+        file_length: int,
+        piece_length: int,
+        file_name: str = "",
+    ) -> None:
+        await self.event_bitfield.wait()
+
+        self.file_name = file_name
+        self.pieces_hash = pieces_hash
+        self.num_pieces = len(self.pieces_hash) // 20
+        self.file_length = file_length
+        self.piece_length = piece_length
+        self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
+
+        self.client_bitfield = bytearray((0).to_bytes(math.ceil(self.num_pieces / 8), byteorder="big", signed=False))
+        self.event_pieces.set()
+
     def get_peer_bitfield(self, piece_index: int) -> bool:
         assert self.peer_bitfield is not None
         bitfield_index = piece_index // 8
         byte_mask = 1 << (7 - piece_index % 8)
         return (self.peer_bitfield[bitfield_index] & byte_mask) != 0
+
+    def has_piece(self, piece_index: int) -> bool:
+        assert self.num_pieces is not None
+        if not self.event_pieces.is_set():
+            raise ValueError("pieces info not initialized")
+        if piece_index < 0 or piece_index >= self.num_pieces:
+            return False
+        return self.get_peer_bitfield(piece_index)
 
     async def _handshake(self) -> None:
         assert self._reader is not None
@@ -143,7 +170,7 @@ class Peer:
                     peer_meta_dict, payload_counter = decode_bencode(ext_payload)
                     if peer_meta_dict["msg_type"] == 1 and payload_counter < payload_length:
                         self.peer_ext_meta_info, _ = decode_bencode(ext_payload, payload_counter)
-                        await self.initialize_pieces(
+                        await self.init_pieces(
                             self.peer_ext_meta_info["pieces"],
                             self.peer_ext_meta_info["length"],
                             self.peer_ext_meta_info["piece length"],
@@ -206,33 +233,6 @@ class Peer:
 
     def abort(self) -> None:
         self._abort = True
-
-    async def initialize_pieces(
-        self,
-        pieces_hash: bytes,
-        file_length: int,
-        piece_length: int,
-        file_name: str = "",
-    ) -> None:
-        await self.event_bitfield.wait()
-
-        self.file_name = file_name
-        self.pieces_hash = pieces_hash
-        self.num_pieces = len(self.pieces_hash) // 20
-        self.file_length = file_length
-        self.piece_length = piece_length
-        self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
-
-        self.client_bitfield = bytearray((0).to_bytes(math.ceil(self.num_pieces / 8), byteorder="big", signed=False))
-        self.event_pieces.set()
-
-    def has_piece(self, piece_index: int) -> bool:
-        assert self.num_pieces is not None
-        if not self.event_pieces.is_set():
-            raise ValueError("pieces info not initialized")
-        if piece_index < 0 or piece_index >= self.num_pieces:
-            return False
-        return self.get_peer_bitfield(piece_index)
 
     async def get_piece(self, piece_index: int) -> bytes | None:
         assert self.pieces_hash is not None

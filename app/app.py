@@ -63,7 +63,7 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
     for address in addresses:
         peer = Peer(address, tracker.info_hash, client_id).run_task()
 
-        await peer.initialize_pieces(tracker.pieces_hash, tracker.file_length, tracker.piece_length)
+        await peer.init_pieces(tracker.pieces_hash, tracker.file_length, tracker.piece_length)
         piece = await peer.get_piece(piece_index)
         peer.cancel_task()
         if piece is not None:
@@ -102,7 +102,7 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
         assert tracker.piece_length is not None
         # print("peer", address, "received job", piece_index)
         peer = Peer(address, tracker.info_hash, client_id).run_task()
-        await peer.initialize_pieces(tracker.pieces_hash, tracker.file_length, tracker.piece_length)
+        await peer.init_pieces(tracker.pieces_hash, tracker.file_length, tracker.piece_length)
         piece = await peer.get_piece(piece_index)
         peer.cancel_task()
         if piece is not None:
