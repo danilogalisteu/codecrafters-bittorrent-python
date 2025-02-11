@@ -117,3 +117,13 @@ class Client:
                     await peer.send_have(piece_index)
 
         return piece_index in self.pieces
+
+    async def get_all(self) -> bool:
+        assert self.num_pieces is not None
+
+        await asyncio.gather(*[self.get_piece(piece_index) for piece_index in range(self.num_pieces)])
+
+        return (
+            len([piece_index for piece_index in range(self.num_pieces) if piece_index in self.pieces])
+            == self.num_pieces
+        )
