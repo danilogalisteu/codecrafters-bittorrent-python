@@ -92,11 +92,45 @@ class Peer:
         byte_mask = 1 << (7 - piece_index % 8)
         self.peer_bitfield[bitfield_index] |= byte_mask
 
+    async def send_keepalive(self) -> None:
+        await self._send_queue.put((MsgID.KEEPALIVE, b""))
+
+    async def send_is_choke(self) -> None:
+        await self._send_queue.put((MsgID.CHOKE, b""))
+        self.event_is_unchoke.clear()
+
+    async def send_is_unchoke(self) -> None:
+        await self._send_queue.put((MsgID.UNCHOKE, b""))
+        self.event_is_unchoke.set()
+
+    async def send_am_interested(self) -> None:
+        await self._send_queue.put((MsgID.INTERESTED, b""))
+        self.event_am_interested.set()
+
+    async def send_am_notinterested(self) -> None:
+        await self._send_queue.put((MsgID.NOTINTERESTED, b""))
+        self.event_am_interested.clear()
+
     async def send_have(self, piece_index: int) -> None:
         await self._send_queue.put((MsgID.HAVE, piece_index.to_bytes(4, byteorder="big", signed=False)))
 
     async def send_bitfield(self, client_bitfield: bytes) -> None:
         await self._send_queue.put((MsgID.BITFIELD, client_bitfield))
+
+    async def send_request(self, piece_index: int, begin: int, length: int) -> None:
+        await self._send_queue.put((MsgID.REQUEST, struct.pack("!III", piece_index, begin, length)))
+
+    async def send_piece(self, piece_index: int, begin: int, block: bytes) -> None:
+        await self._send_queue.put((MsgID.PIECE, struct.pack(f"!II{len(block)}s", piece_index, begin, block)))
+
+    async def send_cancel(self, piece_index: int, begin: int, length: int) -> None:
+        await self._send_queue.put((MsgID.CANCEL, struct.pack("!III", piece_index, begin, length)))
+
+    async def send_port(self, port: int) -> None:
+        await self._send_queue.put((MsgID.PORT, struct.pack("!H", port)))
+
+    async def send_extension(self, ext_id: int, payload: bytes) -> None:
+        await self._send_queue.put((MsgID.EXTENSION, struct.pack(f"!B{len(payload)}s", ext_id, payload)))
 
     def has_piece(self, piece_index: int) -> bool:
         assert self.num_pieces is not None
@@ -152,17 +186,30 @@ class Peer:
                 assert len(recv_payload) == 0
                 self.event_is_interested.clear()
             case MsgID.HAVE:
+                assert len(recv_payload) == 4
                 piece_index = struct.unpack("!I", recv_payload[0:4])[0]
                 self.set_peer_bitfield(piece_index)
             case MsgID.BITFIELD:
                 self.peer_bitfield = bytearray(recv_payload)
                 self.event_bitfield.set()
+            case MsgID.REQUEST:
+                assert len(recv_payload) == 12
+                # TODO handle request
+                # index, begin, length = struct.unpack("!III", recv_payload)
             case MsgID.PIECE:
-                index = struct.unpack("!I", recv_payload[0:4])[0]
-                begin = struct.unpack("!I", recv_payload[4:8])[0]
-                block = recv_payload[8:]
+                assert len(recv_payload) > 8
+                index, begin, block = struct.unpack(f"!II{len(recv_payload) - 8}s", recv_payload)
                 await self._recv_queue.put((index, begin, block))
+            case MsgID.CANCEL:
+                assert len(recv_payload) == 12
+                # TODO handle request
+                # index, begin, length = struct.unpack("!III", recv_payload)
+            case MsgID.PORT:
+                assert len(recv_payload) == 2
+                # TODO handle request
+                # port = struct.unpack("!H", recv_payload)
             case MsgID.EXTENSION:
+                assert len(recv_payload) > 1
                 ext_id = recv_payload[0]
                 ext_payload = recv_payload[1:]
                 # handshake
@@ -172,12 +219,11 @@ class Peer:
                     self.peer_ext_support = payload
                     if "ut_metadata" in self.peer_ext_support["m"]:
                         self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
-                        assert self.peer_ext_meta_id is not None
-                        meta_dict = encode_bencode({"msg_type": 0, "piece": 0})
-                        await self._send_queue.put((MsgID.EXTENSION, self.peer_ext_meta_id.to_bytes(1) + meta_dict))
+                        assert isinstance(self.peer_ext_meta_id, int)
+                        await self.send_extension(self.peer_ext_meta_id, encode_bencode({"msg_type": 0, "piece": 0}))
                     self.event_extension.set()
                 # metadata
-                elif self.peer_ext_meta_id and ext_id == self.client_ext_support["m"]["ut_metadata"]:
+                elif self.peer_ext_meta_id and ext_id == self.peer_ext_meta_id:
                     payload_length = len(ext_payload)
                     peer_meta_dict, payload_counter = decode_bencode(ext_payload)
                     if peer_meta_dict["msg_type"] == 1 and payload_counter < payload_length:
@@ -191,10 +237,10 @@ class Peer:
                         self.event_metadata.set()
                 # unexpected
                 else:
-                    print("new ext msg id", ext_id, ext_payload)
+                    print("unexpected peer ext msg id", ext_id, ext_payload)
 
             case _:
-                print("received unexpected", recv_id, MsgID(recv_id).name, len(recv_payload), recv_payload)
+                print("unexpected peer msg id", recv_id, MsgID(recv_id).name, len(recv_payload), recv_payload)
 
     async def _comm_recv(self) -> None:
         assert self._reader is not None
@@ -256,8 +302,7 @@ class Peer:
             return None
 
         if not self.event_am_interested.is_set():
-            self.event_am_interested.set()
-            await self._send_queue.put((MsgID.INTERESTED, b""))
+            await self.send_am_interested()
 
         await self.event_am_unchoke.wait()
 
@@ -270,9 +315,8 @@ class Peer:
         current_begin = 0
         while current_begin < piece_length:
             eff_chunk_length = min(chunk_length, piece_length - current_begin)
-            await self._send_queue.put(
-                (MsgID.REQUEST, struct.pack("!III", piece_index, current_begin, eff_chunk_length)),
-            )
+
+            await self.send_request(piece_index, current_begin, eff_chunk_length)
 
             while True:
                 await asyncio.sleep(0)
