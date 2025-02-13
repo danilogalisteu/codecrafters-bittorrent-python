@@ -7,7 +7,7 @@ import aiohttp
 
 from app.protocol import address_str_to_tuple
 from app.protocol.bencode import decode_bencode
-from app.protocol.metainfo import load_metainfo
+from app.protocol.metainfo import TorrentInfo
 
 from .messages import announce_udp, connect_udp
 
@@ -73,11 +73,15 @@ class Tracker:
 
     @classmethod
     def from_torrent(cls, torrent_file: str, client_id: bytes) -> Self:
-        infodata = load_metainfo(torrent_file)
-        assert infodata is not None
-        url, info_hash, pieces_hash, file_name, file_length, piece_length = infodata
-        tracker = cls(url, info_hash, file_length, client_id)
-        tracker.init_pieces(file_name, file_length, piece_length, pieces_hash)
+        torrent_info = TorrentInfo.from_file(torrent_file)
+        assert torrent_info is not None
+        tracker = cls(torrent_info.tracker, torrent_info.info_hash, torrent_info.files[0].length, client_id)
+        tracker.init_pieces(
+            torrent_info.name,
+            torrent_info.files[0].length,
+            torrent_info.piece_length,
+            torrent_info.pieces_hash,
+        )
         return tracker
 
     @classmethod

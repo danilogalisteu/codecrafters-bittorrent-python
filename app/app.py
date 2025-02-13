@@ -7,7 +7,7 @@ from typing import Any
 from .protocol import address_str_to_tuple
 from .protocol.bencode import decode_bencode
 from .protocol.client import Client
-from .protocol.metainfo import load_metainfo
+from .protocol.metainfo import TorrentInfo
 from .protocol.peer.handshake import decode_handshake, encode_handshake
 from .protocol.tracker import Tracker
 
@@ -29,7 +29,9 @@ async def run_decode(value: str) -> None:
 
 
 async def run_info(torrent_file: str) -> None:
-    _ = load_metainfo(torrent_file, show_info=True)
+    torrent_info = TorrentInfo.from_file(torrent_file)
+    assert torrent_info is not None
+    torrent_info.show_info()
 
 
 async def run_peers(torrent_file: str, client_id: bytes) -> None:
@@ -40,17 +42,16 @@ async def run_peers(torrent_file: str, client_id: bytes) -> None:
 
 async def run_handshake(torrent_file: str, peer_address: str, client_id: bytes) -> None:
     peer = address_str_to_tuple(peer_address)
-    infodata = load_metainfo(torrent_file)
-    assert infodata is not None
-    info_hash = infodata[1]
+    torrent_info = TorrentInfo.from_file(torrent_file)
+    assert torrent_info is not None
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect(peer)
         protocol = b"BitTorrent protocol"
-        sock.send(encode_handshake(protocol, info_hash, client_id))
+        sock.send(encode_handshake(protocol, torrent_info.info_hash, client_id))
         r_pstr, _, r_info_hash, r_peer_id = decode_handshake(sock.recv(1024))
-        assert protocol == r_pstr
-        assert info_hash == r_info_hash
+        assert r_pstr == protocol
+        assert r_info_hash == torrent_info.info_hash
         print(f"Peer ID: {r_peer_id.hex()}")
 
 
