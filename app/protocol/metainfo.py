@@ -133,6 +133,7 @@ class TorrentInfo:
         meta_info, _ = decode_bencode(metadata, 0)
         assert isinstance(meta_info, dict)
         self.name = meta_info.get("name", "")
+        self.private = meta_info.get("private", "0") == "1",
         self.files, self.total_length = self.parse_files(meta_info)
         self.num_files = len(self.files)
         self.num_pieces = len(meta_info["pieces"]) // 20
