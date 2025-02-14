@@ -10,6 +10,7 @@ import struct
 from typing import Any, Self
 
 from app.protocol.bencode import decode_bencode, encode_bencode
+from app.protocol.metainfo import TorrentInfo
 
 from .handshake import decode_handshake, encode_handshake
 from .messages import METADATA_BLOCK_SIZE, MSG_ID_EXT_HANDSHAKE, MsgExtType, MsgID, decode_message, encode_message
@@ -19,18 +20,17 @@ class Peer:
     def __init__(
         self,
         address: tuple[str, int],
-        info_hash: bytes,
+        torrent: TorrentInfo,
         client_id: bytes,
         client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
         client_ext_support: dict[str | bytes, Any] | None = None,
     ) -> None:
         self.address = address
-        self.info_hash = info_hash
+        self.torrent = torrent
         self.client_id = client_id
         self.client_reserved = client_reserved
         self.client_ext_support = client_ext_support
 
-        # handshake
         self.peer_id: bytes | None = None
         self.peer_reserved: bytes | None = None
         self.peer_bitfield: bytearray | None = None
@@ -40,13 +40,6 @@ class Peer:
         self.peer_ext_meta_size: int | None = None
         self.peer_ext_meta_data: dict[int, bytes] | None = None
         self.peer_ext_meta_info: dict[str | bytes, Any] | None = None
-
-        self.name: str | None = None
-        self.total_length: int | None = None
-        self.piece_length: int | None = None
-        self.pieces_hash: bytes | None = None
-        self.last_piece_length: int | None = None
-        self.num_pieces: int | None = None
 
         self._task: asyncio.Task[None] | None = None
         self._running: bool = False
@@ -68,21 +61,6 @@ class Peer:
         self.event_bitfield = asyncio.Event()
         self.event_metadata = asyncio.Event()
         self.event_pieces = asyncio.Event()
-
-    def init_pieces(
-        self,
-        name: str,
-        total_length: int,
-        piece_length: int,
-        pieces_hash: bytes,
-    ) -> None:
-        self.name = name
-        self.pieces_hash = pieces_hash
-        self.num_pieces = len(self.pieces_hash) // 20
-        self.total_length = total_length
-        self.piece_length = piece_length
-        self.last_piece_length = self.total_length - self.piece_length * (self.num_pieces - 1)
-        self.event_pieces.set()
 
     def get_bitfield_piece(self, piece_index: int) -> bool:
         assert self.peer_bitfield is not None
@@ -142,15 +120,15 @@ class Peer:
         pstr = b"BitTorrent protocol"
         handshake_len = len(pstr) + 1 + 8 + 20 + 20
 
-        self._writer.write(encode_handshake(pstr, self.info_hash, self.client_id, self.client_reserved))
+        self._writer.write(encode_handshake(pstr, self.torrent.info_hash, self.client_id, self.client_reserved))
         await self._writer.drain()
 
         while not self.event_handshake.is_set():
             self._comm_buffer += await self._reader.read(handshake_len)
             try:
                 r_pstr, self.peer_reserved, r_info_hash, self.peer_id = decode_handshake(self._comm_buffer)
-                assert pstr == r_pstr
-                assert self.info_hash == r_info_hash
+                assert r_pstr == pstr
+                assert r_info_hash == self.torrent.info_hash
                 self._comm_buffer = self._comm_buffer[handshake_len:]
                 self.event_handshake.set()
             except IndexError:
@@ -163,6 +141,8 @@ class Peer:
             await self.send_extension(MSG_ID_EXT_HANDSHAKE, encode_bencode(self.client_ext_support))
         else:
             self.event_extension.set()
+            self.event_metadata.set()
+            self.event_pieces.set()
 
     async def _parse_ext_handshake(self, ext_payload: bytes) -> int:
         payload, payload_counter = decode_bencode(ext_payload)
@@ -218,17 +198,9 @@ class Peer:
             for piece_index in sorted(self.peer_ext_meta_data.keys()):
                 metadata += self.peer_ext_meta_data[piece_index]
 
-            assert hashlib.sha1(metadata).digest() == self.info_hash
-            metadata_value, _ = decode_bencode(metadata, 0)
-            assert isinstance(metadata_value, dict)
-            self.peer_ext_meta_info = metadata_value
-            self.init_pieces(
-                self.peer_ext_meta_info["name"],
-                self.peer_ext_meta_info["length"],
-                self.peer_ext_meta_info["piece length"],
-                self.peer_ext_meta_info["pieces"],
-            )
+            self.torrent.update_info(metadata)
             self.event_metadata.set()
+            self.event_pieces.set()
 
         return payload_counter
 
@@ -352,14 +324,9 @@ class Peer:
         self._abort = True
 
     async def get_piece(self, piece_index: int) -> bytes | None:
-        assert self.pieces_hash is not None
-        assert self.num_pieces is not None
-        assert self.piece_length is not None
-        assert self.last_piece_length is not None
-
         if (
             (not self.event_pieces.is_set())
-            or (piece_index < 0 or piece_index >= self.num_pieces)
+            or (piece_index < 0 or piece_index >= self.torrent.num_pieces)
             or (not self.get_bitfield_piece(piece_index))
         ):
             return None
@@ -369,7 +336,7 @@ class Peer:
 
         await self.event_am_unchoke.wait()
 
-        piece_length = self.piece_length if piece_index < self.num_pieces - 1 else self.last_piece_length
+        piece_length = self.torrent.piece_length if piece_index < self.torrent.num_pieces - 1 else self.torrent.last_piece_length
         assert piece_length > 0
 
         piece = b""
@@ -394,7 +361,7 @@ class Peer:
         self._recv_length = 1024
 
         r_piece_hash = hashlib.sha1(piece).digest()
-        if r_piece_hash == self.pieces_hash[piece_index * 20 : piece_index * 20 + 20]:
+        if r_piece_hash == self.torrent.pieces_hash[piece_index * 20 : piece_index * 20 + 20]:
             return piece
 
         return None

@@ -64,8 +64,8 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
         if await client.get_piece(piece_index):
             break
 
-    if client.name and not piece_file:
-        piece_file = client.name + f"_piece{piece_index}"
+    if client.torrent.name and not piece_file:
+        piece_file = client.torrent.name + f"_piece{piece_index}"
     await asyncio.to_thread(stdlib_write, client.pieces[piece_index], piece_file, "wb")
 
 
@@ -78,8 +78,8 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
         if await client.get_all():
             break
 
-    if client.name and not out_file:
-        out_file = client.name
+    if client.torrent.name and not out_file:
+        out_file = client.torrent.name
     for piece_index in sorted(client.pieces):
         await asyncio.to_thread(stdlib_write, client.pieces[piece_index], out_file, "ab")
 
@@ -131,19 +131,15 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
         print("Peer ID:", peer.peer_id.hex())
         print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
 
-        assert peer.pieces_hash is not None
-        assert peer.total_length is not None
-        assert peer.piece_length is not None
-        assert peer.num_pieces is not None
         assert client.trackers is not None
         print("Tracker URL:", client.trackers[0].url)
-        print("File name:", peer.name)
-        print("Length:", peer.total_length)
-        print("Info Hash:", client.info_hash.hex())
-        print("Piece Length:", peer.piece_length)
+        print("File name:", peer.torrent.name)
+        print("Length:", peer.torrent.total_length)
+        print("Info Hash:", client.torrent.info_hash.hex())
+        print("Piece Length:", peer.torrent.piece_length)
         print("Piece Hashes:")
-        for piece_index in range(peer.num_pieces):
-            print(peer.pieces_hash[piece_index * 20 : piece_index * 20 + 20].hex())
+        for piece_index in range(peer.torrent.num_pieces):
+            print(peer.torrent.pieces_hash[piece_index * 20 : piece_index * 20 + 20].hex())
 
         break
 
@@ -160,8 +156,8 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
         if await client.get_piece(piece_index):
             break
 
-    if client.name and not piece_file:
-        piece_file = client.name + f"_piece{piece_index}"
+    if client.torrent.name and not piece_file:
+        piece_file = client.torrent.name + f"_piece{piece_index}"
     await asyncio.to_thread(stdlib_write, client.pieces[piece_index], piece_file, "wb")
 
 
@@ -177,7 +173,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
         if await client.get_all():
             break
 
-    if client.name and not out_file:
-        out_file = client.name
+    if client.torrent.name and not out_file:
+        out_file = client.torrent.name
     for piece_index in sorted(client.pieces):
         await asyncio.to_thread(stdlib_write, client.pieces[piece_index], out_file, "ab")
