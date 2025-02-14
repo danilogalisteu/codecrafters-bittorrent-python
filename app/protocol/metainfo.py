@@ -76,7 +76,7 @@ class TorrentInfo:
             assert isinstance(metainfo, dict)
 
             files, total_length = cls.parse_files(metainfo["info"])
-            num_pieces = len(metainfo["info"]["pieces"] // 20)
+            num_pieces = len(metainfo["info"]["pieces"]) // 20
             last_piece_length = total_length - num_pieces * metainfo["info"]["piece length"]
             return cls(
                 tracker=metainfo.get("announce", ""),
