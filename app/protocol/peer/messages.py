@@ -1,6 +1,9 @@
 import struct
 from enum import IntEnum
 
+MSG_ID_EXT_HANDSHAKE = 0
+METADATA_BLOCK_SIZE = 16384
+
 
 class MsgID(IntEnum):
     KEEPALIVE = -1
@@ -15,6 +18,12 @@ class MsgID(IntEnum):
     CANCEL = 8
     PORT = 9
     EXTENSION = 20
+
+
+class MsgExtType(IntEnum):
+    REQUEST = 0
+    DATA = 1
+    REJECT = 2
 
 
 def encode_message(send_id: int, payload: bytes = b"") -> bytes:
