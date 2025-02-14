@@ -21,12 +21,10 @@ class FileInfo:
 
 
 @dataclass
-class TorrentInfo:
-    tracker: str = ""
-    tracker_list: list[list[str]] = field(default_factory=list)
-
+class TorrentMeta:
     info_hash: bytes = b""
     name: str = ""
+    private: bool = False
     total_length: int = 0
     num_pieces: int = 0
     piece_length: int = 0
@@ -34,12 +32,6 @@ class TorrentInfo:
     pieces_hash: bytes = b""
     num_files: int = 0
     files: list[FileInfo] = field(default_factory=list)
-
-    private: bool = False
-    encoding: str = ""
-    comment: str = ""
-    created_by: str = ""
-    creation_date: datetime = datetime.min
 
     @staticmethod
     def parse_files(meta_info: dict[str | bytes, Any]) -> tuple[list[FileInfo], int]:
@@ -69,6 +61,29 @@ class TorrentInfo:
 
         return files, file_offset
 
+    def update_info(self, metadata: bytes) -> None:
+        assert self.info_hash == hashlib.sha1(metadata).digest()
+        meta_info, _ = decode_bencode(metadata, 0)
+        assert isinstance(meta_info, dict)
+        self.name = meta_info.get("name", "")
+        self.private = meta_info.get("private", "0") == "1"
+        self.files, self.total_length = self.parse_files(meta_info)
+        self.num_files = len(self.files)
+        self.num_pieces = len(meta_info["pieces"]) // 20
+        self.piece_length = meta_info["piece length"]
+        self.last_piece_length = self.total_length - (self.num_pieces - 1) * self.piece_length
+        self.pieces_hash = meta_info["pieces"]
+
+
+@dataclass
+class TorrentInfo(TorrentMeta):
+    tracker: str = ""
+    tracker_list: list[list[str]] = field(default_factory=list)
+    encoding: str = ""
+    comment: str = ""
+    created_by: str = ""
+    creation_date: datetime = datetime.min
+
     @classmethod
     def from_file(cls, file_name: str) -> Self | None:
         with pathlib.Path(file_name).open("rb") as metadata:
@@ -77,7 +92,7 @@ class TorrentInfo:
 
             files, total_length = cls.parse_files(metainfo["info"])
             num_pieces = len(metainfo["info"]["pieces"]) // 20
-            last_piece_length = total_length - num_pieces * metainfo["info"]["piece length"]
+            last_piece_length = total_length - (num_pieces - 1) * metainfo["info"]["piece length"]
             return cls(
                 tracker=metainfo.get("announce", ""),
                 tracker_list=metainfo.get("announce-list", []),
@@ -127,19 +142,6 @@ class TorrentInfo:
             info_hash=info_hash,
             name=display_name,
         )
-
-    def update_info(self, metadata: bytes) -> None:
-        assert self.info_hash == hashlib.sha1(metadata).digest()
-        meta_info, _ = decode_bencode(metadata, 0)
-        assert isinstance(meta_info, dict)
-        self.name = meta_info.get("name", "")
-        self.private = meta_info.get("private", "0") == "1"
-        self.files, self.total_length = self.parse_files(meta_info)
-        self.num_files = len(self.files)
-        self.num_pieces = len(meta_info["pieces"]) // 20
-        self.piece_length = meta_info["piece length"]
-        self.last_piece_length = self.total_length - self.num_pieces * self.piece_length
-        self.pieces_hash = meta_info["pieces"]
 
     def show_info(self) -> None:
         print(f"Tracker URL: {self.tracker}")
