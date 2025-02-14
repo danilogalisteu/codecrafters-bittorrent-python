@@ -41,7 +41,7 @@ class Peer:
         self.peer_ext_meta_data: dict[int, bytes] | None = None
         self.peer_ext_meta_info: dict[str | bytes, Any] | None = None
 
-        self.file_name: str | None = None
+        self.name: str | None = None
         self.total_length: int | None = None
         self.piece_length: int | None = None
         self.pieces_hash: bytes | None = None
@@ -71,12 +71,12 @@ class Peer:
 
     def init_pieces(
         self,
-        file_name: str,
+        name: str,
         total_length: int,
         piece_length: int,
         pieces_hash: bytes,
     ) -> None:
-        self.file_name = file_name
+        self.name = name
         self.pieces_hash = pieces_hash
         self.num_pieces = len(self.pieces_hash) // 20
         self.total_length = total_length

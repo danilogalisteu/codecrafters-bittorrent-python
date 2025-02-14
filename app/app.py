@@ -64,8 +64,8 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
         if await client.get_piece(piece_index):
             break
 
-    if client.file_name and not piece_file:
-        piece_file = client.file_name + f"_piece{piece_index}"
+    if client.name and not piece_file:
+        piece_file = client.name + f"_piece{piece_index}"
     await asyncio.to_thread(stdlib_write, client.pieces[piece_index], piece_file, "wb")
 
 
@@ -78,8 +78,8 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
         if await client.get_all():
             break
 
-    if client.file_name and not out_file:
-        out_file = client.file_name
+    if client.name and not out_file:
+        out_file = client.name
     for piece_index in sorted(client.pieces):
         await asyncio.to_thread(stdlib_write, client.pieces[piece_index], out_file, "ab")
 
@@ -137,7 +137,7 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
         assert peer.num_pieces is not None
         assert client.trackers is not None
         print("Tracker URL:", client.trackers[0].url)
-        print("File name:", peer.file_name)
+        print("File name:", peer.name)
         print("Length:", peer.total_length)
         print("Info Hash:", client.info_hash.hex())
         print("Piece Length:", peer.piece_length)
@@ -160,8 +160,8 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
         if await client.get_piece(piece_index):
             break
 
-    if client.file_name and not piece_file:
-        piece_file = client.file_name + f"_piece{piece_index}"
+    if client.name and not piece_file:
+        piece_file = client.name + f"_piece{piece_index}"
     await asyncio.to_thread(stdlib_write, client.pieces[piece_index], piece_file, "wb")
 
 
@@ -177,7 +177,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
         if await client.get_all():
             break
 
-    if client.file_name and not out_file:
-        out_file = client.file_name
+    if client.name and not out_file:
+        out_file = client.name
     for piece_index in sorted(client.pieces):
         await asyncio.to_thread(stdlib_write, client.pieces[piece_index], out_file, "ab")

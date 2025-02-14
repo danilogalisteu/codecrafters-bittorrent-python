@@ -21,7 +21,7 @@ class Client:
         self.client_ext_support = client_ext_support
         self.client_bitfield: bytearray | None = None
 
-        self.file_name: str | None = None
+        self.name: str | None = None
         self.total_length: int | None = None
         self.piece_length: int | None = None
         self.pieces_hash: bytes | None = None
@@ -34,8 +34,8 @@ class Client:
         self.pieces: dict[int, bytes] = {}
         self.event_pieces = asyncio.Event()
 
-    def init_pieces(self, file_name: str, total_length: int, piece_length: int, pieces_hash: bytes) -> None:
-        self.file_name = file_name
+    def init_pieces(self, name: str, total_length: int, piece_length: int, pieces_hash: bytes) -> None:
+        self.name = name
         self.total_length = total_length
         self.piece_length = piece_length
         self.pieces_hash = pieces_hash
@@ -115,19 +115,19 @@ class Client:
             await asyncio.sleep(0)
             for peer in self.peers.values():
                 if peer.event_pieces.is_set():
-                    assert peer.file_name is not None
+                    assert peer.name is not None
                     assert peer.total_length is not None
                     assert peer.piece_length is not None
                     assert peer.pieces_hash is not None
-                    self.init_pieces(peer.file_name, peer.total_length, peer.piece_length, peer.pieces_hash)
+                    self.init_pieces(peer.name, peer.total_length, peer.piece_length, peer.pieces_hash)
                     break
 
-        assert self.file_name is not None
+        assert self.name is not None
         assert self.total_length is not None
         assert self.piece_length is not None
         assert self.pieces_hash is not None
         for peer in self.peers.values():
-            peer.init_pieces(self.file_name, self.total_length, self.piece_length, self.pieces_hash)
+            peer.init_pieces(self.name, self.total_length, self.piece_length, self.pieces_hash)
 
     async def get_piece(self, piece_index: int) -> bool:
         for peer in self.peers.values():
