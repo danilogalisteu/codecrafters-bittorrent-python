@@ -35,7 +35,6 @@ class Peer:
         self.peer_reserved: bytes | None = None
         self.peer_bitfield: bytearray | None = None
 
-        self.peer_supports_extension: bool | None = None
         self.peer_ext_support: dict[str | bytes, Any] | None = None
         self.peer_ext_meta_id: int | None = None
         self.peer_ext_meta_size: int | None = None
