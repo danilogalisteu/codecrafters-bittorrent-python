@@ -1,8 +1,10 @@
 import hashlib
 import pathlib
-from dataclasses import dataclass
+from base64 import b32decode
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Self
+from urllib.parse import parse_qs, urlparse
 
 from .bencode import decode_bencode, encode_bencode
 
@@ -11,29 +13,29 @@ from .bencode import decode_bencode, encode_bencode
 class FileInfo:
     path: str
     length: int
-    offset: int = 0
-    mtime: datetime = datetime.min
+    offset: int
     md5: str = ""
     sha1: str = ""
     crc32: str = ""
+    mtime: datetime = datetime.min
 
 
 @dataclass
 class TorrentInfo:
-    tracker: str
-    tracker_list: list[list[str]]
+    tracker: str = ""
+    tracker_list: list[list[str]] = field(default_factory=list)
 
-    comment: str
-    created_by: str
-    creation_date: datetime
-    encoding: str
+    info_hash: bytes = b""
+    name: str = ""
+    piece_length: int = 0
+    pieces_hash: bytes = b""
+    files: list[FileInfo] = field(default_factory=list)
 
-    info_hash: bytes
-    name: str
-    private: bool
-    piece_length: int
-    pieces_hash: bytes
-    files: list[FileInfo]
+    private: bool = False
+    encoding: str = ""
+    comment: str = ""
+    created_by: str = ""
+    creation_date: datetime = datetime.min
 
     @classmethod
     def from_file(cls, file_name: str) -> Self | None:
@@ -45,7 +47,7 @@ class TorrentInfo:
 
             if "length" in metainfo["info"]:
                 # single
-                files = [FileInfo(path=display_name, length=metainfo["info"]["length"])]
+                files = [FileInfo(path=display_name, length=metainfo["info"]["length"], offset=0)]
             else:
                 # multi
                 files = []
@@ -70,16 +72,16 @@ class TorrentInfo:
             return cls(
                 tracker=metainfo.get("announce", ""),
                 tracker_list=metainfo.get("announce-list", []),
-                comment=metainfo.get("comment", ""),
-                created_by=metainfo.get("created by", ""),
-                creation_date=datetime.fromtimestamp(int(metainfo.get("creation date", "0")), UTC),
-                encoding=metainfo.get("encoding", ""),
                 info_hash=hashlib.sha1(encode_bencode(metainfo["info"])).digest(),
-                name=metainfo["info"].get("name", ""),
-                private=metainfo["info"].get("private", "0") == "1",
+                name=display_name,
                 piece_length=metainfo["info"]["piece length"],
                 pieces_hash=metainfo["info"]["pieces"],
                 files=files,
+                private=metainfo["info"].get("private", "0") == "1",
+                encoding=metainfo.get("encoding", ""),
+                comment=metainfo.get("comment", ""),
+                created_by=metainfo.get("created by", ""),
+                creation_date=datetime.fromtimestamp(int(metainfo.get("creation date", "0")), UTC),
             )
 
     def show_info(self) -> None:
