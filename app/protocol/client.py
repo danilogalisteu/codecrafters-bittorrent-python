@@ -58,7 +58,7 @@ class Client:
         assert tracker.file_name is not None
         assert tracker.piece_length is not None
         assert tracker.pieces_hash is not None
-        client.init_pieces(tracker.file_name, tracker.file_length, tracker.piece_length, tracker.pieces_hash)
+        client.init_pieces(tracker.file_name, tracker.total_length, tracker.piece_length, tracker.pieces_hash)
         return client
 
     @classmethod

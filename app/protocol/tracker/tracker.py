@@ -24,10 +24,10 @@ def peer_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
 
 
 class Tracker:
-    def __init__(self, url: str, info_hash: bytes, file_length: int, client_id: bytes) -> None:
+    def __init__(self, url: str, info_hash: bytes, total_length: int, client_id: bytes) -> None:
         self.url = url
         self.info_hash = info_hash
-        self.file_length = file_length
+        self.total_length = total_length
         self.client_id = client_id
         self.port: int = 6881
         self.timeout = 15.0
@@ -43,13 +43,13 @@ class Tracker:
         self.num_pieces: int | None = None
         self.last_piece_length: int | None = None
 
-    def init_pieces(self, file_name: str, file_length: int, piece_length: int, pieces_hash: bytes) -> None:
+    def init_pieces(self, file_name: str, total_length: int, piece_length: int, pieces_hash: bytes) -> None:
         self.file_name = file_name
-        self.file_length = file_length
+        self.total_length = total_length
         self.piece_length = piece_length
         self.pieces_hash = pieces_hash
         self.num_pieces = len(self.pieces_hash) // 20
-        self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
+        self.last_piece_length = self.total_length - self.piece_length * (self.num_pieces - 1)
 
     @staticmethod
     def parse_magnet(url: str) -> tuple[str, list[str], str]:
@@ -97,7 +97,7 @@ class Tracker:
             "port": self.port,
             "uploaded": 0,
             "downloaded": 0,
-            "left": self.file_length,
+            "left": self.total_length,
             "compact": 1,
         }
         url = self.url + "?" + urlencode(query)
@@ -127,7 +127,7 @@ class Tracker:
             self.client_id,
             self.port,
             0,
-            self.file_length,
+            self.total_length,
             0,
         )
         self.peer_addresses = peer_list_from_bytes(peers_bytes)
