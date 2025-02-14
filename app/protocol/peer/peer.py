@@ -1,12 +1,18 @@
+"""
+https://www.bittorrent.org/beps/bep_0010.html
+https://www.bittorrent.org/beps/bep_0009.html
+"""
+
 import asyncio
 import hashlib
+import math
 import struct
 from typing import Any, Self
 
 from app.protocol.bencode import decode_bencode, encode_bencode
 
 from .handshake import decode_handshake, encode_handshake
-from .messages import MsgID, decode_message, encode_message
+from .messages import METADATA_BLOCK_SIZE, MSG_ID_EXT_HANDSHAKE, MsgExtType, MsgID, decode_message, encode_message
 
 
 class Peer:
@@ -31,8 +37,10 @@ class Peer:
 
         self.peer_supports_extension: bool | None = None
         self.peer_ext_support: dict[str | bytes, Any] | None = None
-        self.peer_ext_meta_id = None
-        self.peer_ext_meta_info = None
+        self.peer_ext_meta_id: int | None = None
+        self.peer_ext_meta_size: int | None = None
+        self.peer_ext_meta_data: dict[int, bytes] | None = None
+        self.peer_ext_meta_info: dict[str | bytes, Any] | None = None
 
         self.file_name: str | None = None
         self.file_length: int | None = None
@@ -153,38 +161,100 @@ class Peer:
         assert self.peer_reserved is not None
         self.supports_extension = ((self.peer_reserved[5] >> 4) & 1) == 1
         if self.supports_extension and self.client_ext_support:
-            ext_handshake_payload = b"\x00" + encode_bencode(self.client_ext_support)
-            await self._send_queue.put((MsgID.EXTENSION, ext_handshake_payload))
+            await self.send_extension(MSG_ID_EXT_HANDSHAKE, encode_bencode(self.client_ext_support))
         else:
             self.event_extension.set()
 
+    async def _parse_ext_handshake(self, ext_payload: bytes) -> int:
+        payload, payload_counter = decode_bencode(ext_payload)
+
+        # BEP0010
+        assert isinstance(payload, dict)
+        self.peer_ext_support = payload
+        assert "m" in self.peer_ext_support
+
+        # BEP0009
+        if "ut_metadata" in self.peer_ext_support["m"] and "metadata_size" in self.peer_ext_support:
+            self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
+            self.peer_ext_meta_size = self.peer_ext_support["metadata_size"]
+            assert isinstance(self.peer_ext_meta_id, int)
+            assert isinstance(self.peer_ext_meta_size, int)
+
+            self.peer_ext_meta_data = {}
+            num_meta_pieces = math.ceil(self.peer_ext_meta_size / METADATA_BLOCK_SIZE)
+            for piece_index in range(num_meta_pieces):
+                await self.send_extension(
+                    self.peer_ext_meta_id,
+                    encode_bencode({"msg_type": MsgExtType.REQUEST, "piece": piece_index}),
+                )
+                self.peer_ext_meta_data[piece_index] = b""
+
+        self.event_extension.set()
+        return payload_counter
+
+    async def _parse_ext_metadata(self, ext_payload: bytes) -> int:
+        payload_length = len(ext_payload)
+        payload, payload_counter = decode_bencode(ext_payload)
+
+        # BEP0009
+        assert isinstance(payload, dict)
+        peer_meta_dict = payload
+        assert "msg_type" in peer_meta_dict
+        assert "piece" in peer_meta_dict
+        assert "total_size" in peer_meta_dict
+        assert isinstance(self.peer_ext_meta_data, dict)
+
+        if peer_meta_dict["msg_type"] == MsgExtType.DATA and peer_meta_dict["total_size"] == self.peer_ext_meta_size:
+            piece_index = peer_meta_dict["piece"]
+            metadata_payload_length = min(self.peer_ext_meta_size, METADATA_BLOCK_SIZE)
+            assert payload_counter + metadata_payload_length <= payload_length
+            self.peer_ext_meta_data[piece_index] = ext_payload[
+                payload_counter : payload_counter + metadata_payload_length
+            ]
+            payload_counter += metadata_payload_length
+
+        assert isinstance(self.peer_ext_meta_data, dict)
+        if len([True for value in self.peer_ext_meta_data.values() if value == b""]) == 0:
+            metadata = b""
+            for piece_index in sorted(self.peer_ext_meta_data.keys()):
+                metadata += self.peer_ext_meta_data[piece_index]
+
+            metadata_value, _ = decode_bencode(metadata, 0)
+            assert isinstance(metadata_value, dict)
+            self.peer_ext_meta_info = metadata_value
+            self.init_pieces(
+                self.peer_ext_meta_info["name"],
+                self.peer_ext_meta_info["length"],
+                self.peer_ext_meta_info["piece length"],
+                self.peer_ext_meta_info["pieces"],
+            )
+            self.event_metadata.set()
+
+        return payload_counter
+
     async def _parse_extension(self, ext_id: int, ext_payload: bytes) -> None:
+        payload_length = len(ext_payload)
         # handshake
-        if ext_id == 0:
-            payload = decode_bencode(ext_payload)[0]
-            assert isinstance(payload, dict)
-            self.peer_ext_support = payload
-            if "ut_metadata" in self.peer_ext_support["m"]:
-                self.peer_ext_meta_id = self.peer_ext_support["m"]["ut_metadata"]
-                assert isinstance(self.peer_ext_meta_id, int)
-                await self.send_extension(self.peer_ext_meta_id, encode_bencode({"msg_type": 0, "piece": 0}))
-            self.event_extension.set()
+        if ext_id == MSG_ID_EXT_HANDSHAKE:
+            payload_counter = await self._parse_ext_handshake(ext_payload)
+            while payload_length > payload_counter:
+                payload, payload_counter = decode_bencode(ext_payload, payload_counter)
+                print("ext handshake extra", payload_length, payload_counter, payload)
+
         # metadata
         elif self.peer_ext_meta_id and ext_id == self.peer_ext_meta_id:
-            payload_length = len(ext_payload)
-            peer_meta_dict, payload_counter = decode_bencode(ext_payload)
-            if peer_meta_dict["msg_type"] == 1 and payload_counter < payload_length:
-                self.peer_ext_meta_info, _ = decode_bencode(ext_payload, payload_counter)
-                self.init_pieces(
-                    self.peer_ext_meta_info["name"],
-                    self.peer_ext_meta_info["length"],
-                    self.peer_ext_meta_info["piece length"],
-                    self.peer_ext_meta_info["pieces"],
-                )
-                self.event_metadata.set()
+            payload_counter = await self._parse_ext_metadata(ext_payload)
+            while payload_length > payload_counter:
+                payload, payload_counter = decode_bencode(ext_payload, payload_counter)
+                print("ext metadata extra", payload_length, payload_counter, payload)
+
         # unexpected
         else:
             print("unexpected peer ext msg id", ext_id, ext_payload)
+            payload_counter = 0
+            while payload_length > payload_counter:
+                payload, payload_counter = decode_bencode(ext_payload, payload_counter)
+                print("ext unexpected", payload_length, payload_counter, payload)
 
     async def _parse_message(self, recv_id: int, recv_payload: bytes) -> None:
         match recv_id:
