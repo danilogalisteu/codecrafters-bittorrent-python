@@ -85,7 +85,7 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
 
 
 async def run_magnet_parse(magnet_link: str) -> None:
-    _, tracker_urls, info_hash_str = Tracker.parse_magnet(magnet_link)
+    _, tracker_urls, info_hash_str = TorrentInfo.parse_magnet(magnet_link)
     print("Tracker URL:", tracker_urls[0])
     print("Info Hash:", info_hash_str)
 
@@ -132,13 +132,13 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
         print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
 
         assert peer.pieces_hash is not None
-        assert peer.file_length is not None
+        assert peer.total_length is not None
         assert peer.piece_length is not None
         assert peer.num_pieces is not None
         assert client.trackers is not None
         print("Tracker URL:", client.trackers[0].url)
         print("File name:", peer.file_name)
-        print("Length:", peer.file_length)
+        print("Length:", peer.total_length)
         print("Info Hash:", client.info_hash.hex())
         print("Piece Length:", peer.piece_length)
         print("Piece Hashes:")

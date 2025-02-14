@@ -42,7 +42,7 @@ class Peer:
         self.peer_ext_meta_info: dict[str | bytes, Any] | None = None
 
         self.file_name: str | None = None
-        self.file_length: int | None = None
+        self.total_length: int | None = None
         self.piece_length: int | None = None
         self.pieces_hash: bytes | None = None
         self.last_piece_length: int | None = None
@@ -72,16 +72,16 @@ class Peer:
     def init_pieces(
         self,
         file_name: str,
-        file_length: int,
+        total_length: int,
         piece_length: int,
         pieces_hash: bytes,
     ) -> None:
         self.file_name = file_name
         self.pieces_hash = pieces_hash
         self.num_pieces = len(self.pieces_hash) // 20
-        self.file_length = file_length
+        self.total_length = total_length
         self.piece_length = piece_length
-        self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
+        self.last_piece_length = self.total_length - self.piece_length * (self.num_pieces - 1)
         self.event_pieces.set()
 
     def get_bitfield_piece(self, piece_index: int) -> bool:
