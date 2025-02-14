@@ -128,6 +128,18 @@ class TorrentInfo:
             name=display_name,
         )
 
+    def init_info(self, metadata: bytes) -> None:
+        assert self.info_hash == hashlib.sha1(metadata).digest()
+        meta_info, _ = decode_bencode(metadata, 0)
+        assert isinstance(meta_info, dict)
+        self.name = meta_info.get("name", "")
+        self.files, self.total_length = self.parse_files(meta_info)
+        self.num_files = len(self.files)
+        self.num_pieces = len(meta_info["pieces"] // 20)
+        self.piece_length = meta_info["piece length"]
+        self.last_piece_length = self.total_length - self.num_pieces * self.piece_length
+        self.pieces_hash = meta_info["pieces"]
+
     def show_info(self) -> None:
         print(f"Tracker URL: {self.tracker}")
         print(f"Display name: {self.name}")
