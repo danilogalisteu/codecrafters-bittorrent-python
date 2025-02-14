@@ -2,6 +2,7 @@ import asyncio
 import math
 from typing import Any, Self
 
+from .metainfo import TorrentInfo
 from .peer import Peer
 from .tracker import Tracker
 
@@ -21,7 +22,7 @@ class Client:
         self.client_bitfield: bytearray | None = None
 
         self.file_name: str | None = None
-        self.file_length: int | None = None
+        self.total_length: int | None = None
         self.piece_length: int | None = None
         self.pieces_hash: bytes | None = None
         self.last_piece_length: int | None = None
@@ -33,13 +34,13 @@ class Client:
         self.pieces: dict[int, bytes] = {}
         self.event_pieces = asyncio.Event()
 
-    def init_pieces(self, file_name: str, file_length: int, piece_length: int, pieces_hash: bytes) -> None:
+    def init_pieces(self, file_name: str, total_length: int, piece_length: int, pieces_hash: bytes) -> None:
         self.file_name = file_name
-        self.file_length = file_length
+        self.total_length = total_length
         self.piece_length = piece_length
         self.pieces_hash = pieces_hash
         self.num_pieces = len(self.pieces_hash) // 20
-        self.last_piece_length = self.file_length - self.piece_length * (self.num_pieces - 1)
+        self.last_piece_length = self.total_length - self.piece_length * (self.num_pieces - 1)
 
         self.client_bitfield = bytearray((0).to_bytes(math.ceil(self.num_pieces / 8), byteorder="big", signed=False))
         self.event_pieces.set()
@@ -52,13 +53,16 @@ class Client:
         client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
         client_ext_support: dict[str | bytes, Any] | None = None,
     ) -> Self:
-        tracker = Tracker.from_torrent(torrent_file, client_id)
-        client = cls(tracker.info_hash, client_id, client_reserved, client_ext_support)
-        client.trackers = [tracker]
-        assert tracker.file_name is not None
-        assert tracker.piece_length is not None
-        assert tracker.pieces_hash is not None
-        client.init_pieces(tracker.file_name, tracker.total_length, tracker.piece_length, tracker.pieces_hash)
+        torrent_info = TorrentInfo.from_file(torrent_file)
+        assert torrent_info is not None
+        client = cls(torrent_info.info_hash, client_id, client_reserved, client_ext_support)
+        client.trackers = [Tracker(torrent_info.tracker, torrent_info.info_hash, torrent_info.total_length, client_id)]
+        client.init_pieces(
+            torrent_info.name,
+            torrent_info.total_length,
+            torrent_info.piece_length,
+            torrent_info.pieces_hash,
+        )
         return client
 
     @classmethod
@@ -112,18 +116,18 @@ class Client:
             for peer in self.peers.values():
                 if peer.event_pieces.is_set():
                     assert peer.file_name is not None
-                    assert peer.file_length is not None
+                    assert peer.total_length is not None
                     assert peer.piece_length is not None
                     assert peer.pieces_hash is not None
-                    self.init_pieces(peer.file_name, peer.file_length, peer.piece_length, peer.pieces_hash)
+                    self.init_pieces(peer.file_name, peer.total_length, peer.piece_length, peer.pieces_hash)
                     break
 
         assert self.file_name is not None
-        assert self.file_length is not None
+        assert self.total_length is not None
         assert self.piece_length is not None
         assert self.pieces_hash is not None
         for peer in self.peers.values():
-            peer.init_pieces(self.file_name, self.file_length, self.piece_length, self.pieces_hash)
+            peer.init_pieces(self.file_name, self.total_length, self.piece_length, self.pieces_hash)
 
     async def get_piece(self, piece_index: int) -> bool:
         for peer in self.peers.values():
