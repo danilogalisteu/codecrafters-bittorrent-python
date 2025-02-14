@@ -219,6 +219,7 @@ class Peer:
             for piece_index in sorted(self.peer_ext_meta_data.keys()):
                 metadata += self.peer_ext_meta_data[piece_index]
 
+            assert hashlib.sha1(metadata).digest() == self.info_hash
             metadata_value, _ = decode_bencode(metadata, 0)
             assert isinstance(metadata_value, dict)
             self.peer_ext_meta_info = metadata_value
