@@ -3,7 +3,7 @@ import math
 import pathlib
 from typing import Any, Self
 
-from .metainfo import TorrentInfo
+from .metainfo import FileInfo, TorrentInfo
 from .peer import Peer
 from .tracker import Tracker
 
@@ -109,11 +109,41 @@ class Client:
                 peer.torrent = self.torrent
                 peer.event_pieces.set()
 
-    def get_filename(self, piece_index: int) -> pathlib.Path:
+    def _get_piece_path(self, piece_index: int) -> pathlib.Path:
         assert self.torrent.num_pieces is not None
         num_digits = int(math.floor(math.log10(self.torrent.num_pieces)))
         piece_index_str = str(piece_index).zfill(num_digits)
         return self.download_folder / f"{piece_index_str}.piece"
+
+    def _save_piece(self, piece_index: int) -> int:
+        piece_path = self._get_piece_path(piece_index)
+        piece_path.parent.mkdir(parents=True, exist_ok=True)
+        return piece_path.write_bytes(self.pieces[piece_index])
+
+    def _get_file_path(self, file_info: FileInfo) -> pathlib.Path:
+        return self.completed_folder / file_info.path
+
+    def _save_file(self, file_info: FileInfo) -> int:
+        assert self.torrent.piece_length is not None
+        file_path = self._get_file_path(file_info)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        file_length_remaining = file_info.length
+        file_length_saved = 0
+        with file_path.open("wb") as fp:
+            for file_index, piece_index in enumerate(sorted(file_info.pieces)):
+                if file_index == 0:
+                    piece_offset = file_info.offset - piece_index * self.torrent.piece_length
+                    piece_length = min(self.torrent.piece_length - piece_offset, file_info.length)
+                    piece_data = self.pieces[piece_index][piece_offset : piece_offset + piece_length]
+                    file_length_saved += fp.write(piece_data)
+                    file_length_remaining -= piece_length
+                else:
+                    piece_length = min(file_length_remaining, self.torrent.piece_length)
+                    file_length_saved += fp.write(self.pieces[piece_index][0:piece_length])
+                    file_length_remaining -= piece_length
+
+        return file_length_saved
 
     async def get_piece(self, piece_index: int) -> bool:
         for peer in self.peers.values():
@@ -129,10 +159,7 @@ class Client:
                 if peer.event_pieces.is_set():
                     await peer.send_have(piece_index)
 
-            # save part
-            piece_filename = self.get_filename(piece_index)
-            piece_filename.parent.mkdir(parents=True, exist_ok=True)
-            piece_filename.write_bytes(self.pieces[piece_index])
+            self._save_piece(piece_index)
 
         return piece_index in self.pieces
 
@@ -147,23 +174,7 @@ class Client:
         )
 
         if is_complete:
-            # save file(s)
             for file_info in self.torrent.files:
-                file_path = self.completed_folder / file_info.path
-                file_path.parent.mkdir(parents=True, exist_ok=True)
-                file_length_remaining = file_info.length
-                with file_path.open("wb") as fp:
-                    for file_index, piece_index in enumerate(sorted(file_info.pieces)):
-                        if file_index == 0:
-                            piece_offset = file_info.offset - piece_index * self.torrent.piece_length
-                            piece_length = min(self.torrent.piece_length - piece_offset, file_info.length)
-                            fp.write(
-                                self.pieces[piece_index][piece_offset : piece_offset + piece_length],
-                            )
-                            file_length_remaining -= piece_length
-                        else:
-                            piece_length = min(file_length_remaining, self.torrent.piece_length)
-                            fp.write(self.pieces[piece_index][0:piece_length])
-                            file_length_remaining -= piece_length
+                self._save_file(file_info)
 
         return is_complete
