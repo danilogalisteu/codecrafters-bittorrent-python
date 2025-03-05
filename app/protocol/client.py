@@ -104,10 +104,20 @@ class Client:
                     self.event_pieces.set()
                     break
 
+        self._save_torrent()
+
         for peer in self.peers.values():
             if not peer.event_pieces.is_set():
                 peer.torrent = self.torrent
                 peer.event_pieces.set()
+
+    def _get_torrent_path(self) -> pathlib.Path:
+        return self.download_folder.parent / f"{self.torrent.info_hash.hex()}.torrent"
+
+    def _save_torrent(self) -> int | None:
+        assert self.torrent.num_pieces is not None
+        torrent_path = self._get_torrent_path()
+        return self.torrent.to_file(torrent_path)
 
     def _get_piece_path(self, piece_index: int) -> pathlib.Path:
         assert self.torrent.num_pieces is not None
