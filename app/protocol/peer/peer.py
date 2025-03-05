@@ -336,7 +336,9 @@ class Peer:
 
         await self.event_am_unchoke.wait()
 
-        piece_length = self.torrent.piece_length if piece_index < self.torrent.num_pieces - 1 else self.torrent.last_piece_length
+        piece_length = (
+            self.torrent.piece_length if piece_index < self.torrent.num_pieces - 1 else self.torrent.last_piece_length
+        )
         assert piece_length > 0
 
         piece = b""
