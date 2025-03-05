@@ -97,8 +97,13 @@ class Tracker:
             get_peers_cb = self._get_peers_tcp
         elif self.url.startswith("udp"):
             get_peers_cb = self._get_peers_udp
+        elif self.url.startswith("wss"):
+            # TODO handle wss protocol
+            print(f"unhandled tracker protocol {self.url}")
+            return []
         else:
-            raise ValueError(f"unknown tracker protocol {self.url}")
+            print(f"unknown tracker protocol {self.url}")
+            return []
 
         n_retry = 0
         while True:
