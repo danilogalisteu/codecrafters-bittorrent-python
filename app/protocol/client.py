@@ -1,5 +1,6 @@
 import asyncio
 import math
+import pathlib
 from typing import Any, Self
 
 from .metainfo import TorrentInfo
@@ -14,12 +15,17 @@ class Client:
         client_id: bytes,
         client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
         client_ext_support: dict[str | bytes, Any] | None = None,
+        download_folder: str = "./download",
+        completed_folder: str = "./completed",
     ) -> None:
         self.torrent = torrent
         self.client_id = client_id
         self.client_reserved = client_reserved
         self.client_ext_support = client_ext_support
         self.client_bitfield: bytearray | None = None
+
+        self.download_folder = pathlib.Path(download_folder) / self.torrent.info_hash.hex()
+        self.completed_folder = pathlib.Path(completed_folder) / self.torrent.info_hash.hex()
 
         self.trackers: list[Tracker] | None = None
         self.peer_addresses: set[tuple[str, int]] | None = None
@@ -103,6 +109,12 @@ class Client:
                 peer.torrent = self.torrent
                 peer.event_pieces.set()
 
+    def get_filename(self, piece_index: int) -> pathlib.Path:
+        assert self.torrent.num_pieces is not None
+        num_digits = int(math.floor(math.log10(self.torrent.num_pieces)))
+        piece_index_str = str(piece_index).zfill(num_digits)
+        return self.download_folder / f"{piece_index_str}.piece"
+
     async def get_piece(self, piece_index: int) -> bool:
         for peer in self.peers.values():
             if peer.event_bitfield.is_set() and peer.get_bitfield_piece(piece_index):
@@ -117,6 +129,11 @@ class Client:
                 if peer.event_pieces.is_set():
                     await peer.send_have(piece_index)
 
+            # save part
+            piece_filename = self.get_filename(piece_index)
+            piece_filename.parent.mkdir(parents=True, exist_ok=True)
+            piece_filename.write_bytes(self.pieces[piece_index])
+
         return piece_index in self.pieces
 
     async def get_all(self) -> bool:
@@ -124,7 +141,29 @@ class Client:
 
         await asyncio.gather(*[self.get_piece(piece_index) for piece_index in range(self.torrent.num_pieces)])
 
-        return (
+        is_complete = (
             len([piece_index for piece_index in range(self.torrent.num_pieces) if piece_index in self.pieces])
             == self.torrent.num_pieces
         )
+
+        if is_complete:
+            # save file(s)
+            for file_info in self.torrent.files:
+                file_path = self.completed_folder / file_info.path
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_length_remaining = file_info.length
+                with file_path.open("wb") as fp:
+                    for file_index, piece_index in enumerate(sorted(file_info.pieces)):
+                        if file_index == 0:
+                            piece_offset = file_info.offset - piece_index * self.torrent.piece_length
+                            piece_length = min(self.torrent.piece_length - piece_offset, file_info.length)
+                            fp.write(
+                                self.pieces[piece_index][piece_offset : piece_offset + piece_length],
+                            )
+                            file_length_remaining -= piece_length
+                        else:
+                            piece_length = min(file_length_remaining, self.torrent.piece_length)
+                            fp.write(self.pieces[piece_index][0:piece_length])
+                            file_length_remaining -= piece_length
+
+        return is_complete
