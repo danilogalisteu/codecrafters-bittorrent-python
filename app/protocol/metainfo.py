@@ -80,12 +80,12 @@ class TorrentMeta:
         assert isinstance(meta_info, dict)
         self.name = meta_info.get("name", "")
         self.private = meta_info.get("private", "0") == "1"
+        self.piece_length = meta_info["piece length"]
+        self.pieces_hash = meta_info["pieces"]
         self.files, self.total_length = self.parse_files(meta_info)
         self.num_files = len(self.files)
         self.num_pieces = len(meta_info["pieces"]) // 20
-        self.piece_length = meta_info["piece length"]
         self.last_piece_length = self.total_length - (self.num_pieces - 1) * self.piece_length
-        self.pieces_hash = meta_info["pieces"]
 
 
 @dataclass
@@ -155,6 +155,54 @@ class TorrentInfo(TorrentMeta):
             info_hash=info_hash,
             name=display_name,
         )
+
+    def to_file(self, file_name: pathlib.Path) -> int | None:
+        metadata: dict[str | bytes, Any] = {}
+        if self.tracker:
+            metadata["announce"] = self.tracker
+        if self.tracker_list:
+            metadata["announce-list"] = self.tracker_list
+        if self.encoding:
+            metadata["encoding"] = self.encoding
+        if self.comment:
+            metadata["comment"] = self.comment
+        if self.created_by:
+            metadata["created by"] = self.created_by
+        if self.creation_date != datetime.min:
+            metadata["creation date"] = self.creation_date.timestamp()
+
+        metadata["info"] = {}
+        if self.name:
+            metadata["info"]["name"] = self.name
+        if self.private:
+            metadata["info"]["private"] = "1"
+        metadata["info"]["piece length"] = self.piece_length
+        metadata["info"]["pieces"] = self.pieces_hash
+        if self.num_files > 1:
+            metadata["info"]["files"] = []
+            for file in self.files:
+                path = file.path.split("/")
+                if self.name in path:
+                    path.remove(self.name)
+                file_info = {
+                    "path": path,
+                    "length": file.length,
+                }
+                if file.md5:
+                    file_info["md5"] = file.md5
+                if file.sha1:
+                    file_info["sha1"] = file.sha1
+                if file.crc32:
+                    file_info["crc32"] = file.crc32
+                if file.mtime != datetime.min:
+                    file_info["mtime"] = int(file.mtime.timestamp())
+
+                metadata["info"]["files"].append(file_info)
+        else:
+            metadata["info"]["length"] = self.total_length
+
+        with file_name.open("wb") as fp:
+            return fp.write(encode_bencode(metadata))
 
     def show_info(self) -> None:
         print(f"Tracker URL: {self.tracker}")
