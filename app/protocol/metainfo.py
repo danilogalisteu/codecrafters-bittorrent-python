@@ -1,4 +1,5 @@
 import hashlib
+import math
 import pathlib
 from base64 import b32decode
 from dataclasses import dataclass, field
@@ -14,6 +15,7 @@ class FileInfo:
     path: str
     length: int
     offset: int
+    pieces: list[int] = field(default_factory=list)
     md5: str = ""
     sha1: str = ""
     crc32: str = ""
@@ -36,9 +38,14 @@ class TorrentMeta:
     @staticmethod
     def parse_files(meta_info: dict[str | bytes, Any]) -> tuple[list[FileInfo], int]:
         display_name = meta_info.get("name", "")
+        num_pieces = len(meta_info["pieces"]) // 20
+        piece_length = meta_info["piece length"]
+        total_length = meta_info["length"]
 
         if "length" in meta_info:
-            return [FileInfo(path=display_name, length=meta_info["length"], offset=0)], meta_info["length"]
+            return [
+                FileInfo(path=display_name, length=total_length, offset=0, pieces=list(range(num_pieces))),
+            ], total_length
 
         files = []
         file_offset = 0
@@ -51,6 +58,12 @@ class TorrentMeta:
                 path=file_path,
                 length=file_length,
                 offset=file_offset,
+                pieces=list(
+                    range(
+                        int(math.floor(file_offset / piece_length)),
+                        int(math.floor((file_offset + file_length) / piece_length)),
+                    ),
+                ),
                 mtime=datetime.fromtimestamp(float(file["mtime"]), UTC) if "mtime" in file else datetime.min,
                 md5=file.get("md5", ""),
                 sha1=file.get("sha1", ""),
