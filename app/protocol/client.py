@@ -119,6 +119,8 @@ class Client:
     async def wait_peer(self) -> None:
         if self.peer_addresses is None:
             await self.init_peers()
+        while not any(peer.event_bitfield.is_set() for peer in self.peers.values()):
+            await asyncio.sleep(0)
 
     async def wait_metadata(self) -> None:
         await self.wait_peer()
