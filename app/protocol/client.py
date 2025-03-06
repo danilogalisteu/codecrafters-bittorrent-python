@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import math
 import pathlib
 from typing import Any, Self
@@ -96,6 +97,10 @@ class Client:
                     self.client_ext_support,
                 ).run_task()
 
+    def _init_bitfield(self) -> None:
+        assert self.torrent.num_pieces
+        self.client_bitfield = bytearray((0).to_bytes(math.ceil(self.torrent.num_pieces / 8), byteorder="big", signed=False))
+
     async def wait_pieces(self) -> None:
         if self.peer_addresses is None:
             await self.init_peers()
@@ -105,14 +110,13 @@ class Client:
             for peer in self.peers.values():
                 if peer.event_pieces.is_set():
                     self.torrent = peer.torrent
-                    self.client_bitfield = bytearray(
-                        (0).to_bytes(math.ceil(self.torrent.num_pieces / 8), byteorder="big", signed=False),
-                    )
+                    self._init_bitfield()
                     self.event_pieces.set()
                     break
 
         self._save_torrent()
         self._init_files()
+        self._check_pieces()
 
         for peer in self.peers.values():
             if not peer.event_pieces.is_set():
@@ -133,11 +137,13 @@ class Client:
     def _load_torrent(self) -> None:
         torrent_path = self._get_torrent_path()
         if torrent_path.is_file():
-            torrent_info = TorrentInfo.from_file(torrent_path)
+            torrent_info = TorrentInfo.from_file(str(torrent_path))
             assert torrent_info is not None
             if torrent_info.info_hash == self.torrent.info_hash:
                 print(f"Loading torrent file: {torrent_path}")
                 self.torrent = torrent_info
+                self._init_bitfield()
+                self.event_pieces.set()
             else:
                 print(f"Invalid torrent file: {torrent_path}")
                 print(f"Expected info_hash: {self.torrent.info_hash.hex()}")
@@ -157,6 +163,7 @@ class Client:
                 file_path.write_bytes(b"\x00" * file_info.length)
 
     def _write_piece(self, piece_index: int, piece: bytes) -> int:
+        assert self.torrent.num_pieces
         piece_offset = piece_index * self.torrent.piece_length
         piece_start = 0
         for file_info in self.torrent.find_piece(piece_index):
@@ -171,6 +178,7 @@ class Client:
         return piece_start
 
     def _read_piece(self, piece_index: int) -> bytes:
+        assert self.torrent.num_pieces
         piece_offset = piece_index * self.torrent.piece_length
         piece = bytearray()
         for file_info in self.torrent.find_piece(piece_index):
@@ -182,7 +190,24 @@ class Client:
                 piece.extend(fp.read(read_length))
         return bytes(piece)
 
+    def _check_piece(self, piece_index: int) -> bool:
+        piece = self._read_piece(piece_index)
+        piece_hash = self.torrent.pieces_hash[piece_index * 20 : (piece_index + 1) * 20]
+        return hashlib.sha1(piece).digest() == piece_hash
+
+    def _check_pieces(self) -> bool:
+        assert self.torrent.num_pieces
+        for piece_index in range(self.torrent.num_pieces):
+            if self._check_piece(piece_index):
+                self.set_bitfield(piece_index)
+            else:
+                return False
+        return True
+
     async def get_piece(self, piece_index: int) -> bool:
+        if self.get_bitfield(piece_index):
+            return True
+
         for peer in self.peers.values():
             if peer.event_bitfield.is_set() and peer.get_bitfield_piece(piece_index):
                 piece = await peer.get_piece(piece_index)
@@ -201,7 +226,7 @@ class Client:
     async def get_all(self) -> bool:
         assert self.torrent.num_pieces is not None
 
-        await asyncio.gather(*[self.get_piece(piece_index) for piece_index in range(self.torrent.num_pieces)])
+        await asyncio.gather(*[self.get_piece(piece_index) for piece_index in range(self.torrent.num_pieces) if not self.get_bitfield(piece_index)])
 
         return (
             len([piece_index for piece_index in range(self.torrent.num_pieces) if self.get_bitfield(piece_index)])
