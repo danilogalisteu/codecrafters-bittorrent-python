@@ -99,7 +99,9 @@ class Client:
 
     def _init_bitfield(self) -> None:
         assert self.torrent.num_pieces
-        self.client_bitfield = bytearray((0).to_bytes(math.ceil(self.torrent.num_pieces / 8), byteorder="big", signed=False))
+        self.client_bitfield = bytearray(
+            (0).to_bytes(math.ceil(self.torrent.num_pieces / 8), byteorder="big", signed=False),
+        )
 
     async def wait_pieces(self) -> None:
         if self.peer_addresses is None:
@@ -226,7 +228,13 @@ class Client:
     async def get_all(self) -> bool:
         assert self.torrent.num_pieces is not None
 
-        await asyncio.gather(*[self.get_piece(piece_index) for piece_index in range(self.torrent.num_pieces) if not self.get_bitfield(piece_index)])
+        await asyncio.gather(
+            *[
+                self.get_piece(piece_index)
+                for piece_index in range(self.torrent.num_pieces)
+                if not self.get_bitfield(piece_index)
+            ],
+        )
 
         return (
             len([piece_index for piece_index in range(self.torrent.num_pieces) if self.get_bitfield(piece_index)])
