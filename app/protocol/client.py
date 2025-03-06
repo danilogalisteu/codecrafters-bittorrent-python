@@ -132,10 +132,18 @@ class Client:
 
     def _load_torrent(self) -> None:
         torrent_path = self._get_torrent_path()
-        if torrent_path.exists():
+        if torrent_path.is_file():
             torrent_info = TorrentInfo.from_file(torrent_path)
             assert torrent_info is not None
-            self.torrent = torrent_info
+            if torrent_info.info_hash == self.torrent.info_hash:
+                print(f"Loading torrent file: {torrent_path}")
+                self.torrent = torrent_info
+            else:
+                print(f"Invalid torrent file: {torrent_path}")
+                print(f"Expected info_hash: {self.torrent.info_hash.hex()}")
+                print(f"Existing info_hash: {torrent_info.info_hash.hex()}")
+                print("Removing file...")
+                torrent_path.unlink()
 
     def _get_file_path(self, file_info: FileInfo) -> pathlib.Path:
         return self.download_folder / file_info.path
