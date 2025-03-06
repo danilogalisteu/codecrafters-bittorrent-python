@@ -4,6 +4,7 @@ https://www.bittorrent.org/beps/bep_0009.html
 """
 
 import asyncio
+import copy
 import hashlib
 import math
 import struct
@@ -26,7 +27,7 @@ class Peer:
         client_ext_support: dict[str | bytes, Any] | None = None,
     ) -> None:
         self.address = address
-        self.torrent = torrent
+        self.torrent = copy.deepcopy(torrent)
         self.client_id = client_id
         self.client_reserved = client_reserved
         self.client_ext_support = client_ext_support
@@ -39,7 +40,6 @@ class Peer:
         self.peer_ext_meta_id: int | None = None
         self.peer_ext_meta_size: int | None = None
         self.peer_ext_meta_data: dict[int, bytes] | None = None
-        self.peer_ext_meta_info: dict[str | bytes, Any] | None = None
 
         self._task: asyncio.Task[None] | None = None
         self._running: bool = False
@@ -141,7 +141,6 @@ class Peer:
             await self.send_extension(MSG_ID_EXT_HANDSHAKE, encode_bencode(self.client_ext_support))
         else:
             self.event_extension.set()
-            self.event_metadata.set()
             self.event_pieces.set()
 
     async def _parse_ext_handshake(self, ext_payload: bytes) -> int:
@@ -192,7 +191,6 @@ class Peer:
             ]
             payload_counter += metadata_payload_length
 
-        assert isinstance(self.peer_ext_meta_data, dict)
         if len([True for value in self.peer_ext_meta_data.values() if value == b""]) == 0:
             metadata = b""
             for piece_index in sorted(self.peer_ext_meta_data.keys()):
