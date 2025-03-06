@@ -103,10 +103,11 @@ async def run_magnet_handshake(magnet_link: str, client_id: bytes) -> None:
 
     for peer in client.peers.values():
         await peer.event_extension.wait()
-        print("peer_ext_support", peer.peer_ext_support)
 
         assert peer.peer_id is not None
         assert peer.peer_ext_support is not None
+        print("peer_ext_support", peer.peer_ext_support)
+
         print(f"Peer ID: {peer.peer_id.hex()}")
         print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
 
@@ -122,10 +123,11 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
 
     for peer in client.peers.values():
         await peer.event_metadata.wait()
-        print("peer_ext_meta_info", peer.peer_ext_meta_info)
 
         assert peer.peer_id is not None
         assert peer.peer_ext_support is not None
+        print("peer_ext_support", peer.peer_ext_support)
+
         print("Peer ID:", peer.peer_id.hex())
         print("Peer Metadata Extension ID:", peer.peer_ext_support["m"]["ut_metadata"])
 
