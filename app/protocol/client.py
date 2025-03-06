@@ -36,6 +36,12 @@ class Client:
 
         self._load_torrent()
 
+        if self.torrent.num_pieces > 0:
+            self._init_bitfield()
+            self.event_pieces.set()
+            self._init_files()
+            self._check_pieces()
+
     @classmethod
     def from_torrent(
         cls,
