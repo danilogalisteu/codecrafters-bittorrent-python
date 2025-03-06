@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import hashlib
 import math
 import pathlib
@@ -117,7 +118,7 @@ class Client:
             await asyncio.sleep(0)
             for peer in self.peers.values():
                 if peer.event_pieces.is_set():
-                    self.torrent = peer.torrent
+                    self.torrent = copy.deepcopy(peer.torrent)
                     self._init_bitfield()
                     self.event_pieces.set()
                     break
