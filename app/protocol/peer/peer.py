@@ -62,6 +62,9 @@ class Peer:
         self.event_metadata = asyncio.Event()
         self.event_pieces = asyncio.Event()
 
+        if self.torrent.num_pieces > 0:
+            self.event_pieces.set()
+
     def get_bitfield_piece(self, piece_index: int) -> bool:
         assert self.peer_bitfield is not None
         bitfield_index = piece_index // 8
