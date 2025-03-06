@@ -125,10 +125,12 @@ class Client:
     async def wait_metadata(self) -> None:
         await self.wait_peer()
 
-        while not self.event_pieces.is_set():
+        while not any(peer.event_metadata.is_set() for peer in self.peers.values()):
             await asyncio.sleep(0)
+
+        if self.torrent.num_pieces == 0:
             for peer in self.peers.values():
-                if peer.event_pieces.is_set():
+                if peer.event_metadata.is_set():
                     self.torrent = copy.deepcopy(peer.torrent)
                     self._init_bitfield()
                     self.event_pieces.set()
