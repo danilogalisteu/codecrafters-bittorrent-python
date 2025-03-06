@@ -78,7 +78,7 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
             break
 
     if out_file:
-        for piece_index in sorted(client.pieces):
+        for piece_index in range(client.torrent.num_pieces):
             await asyncio.to_thread(stdlib_write, client._read_piece(piece_index), out_file, "ab")
 
 
@@ -171,5 +171,5 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
             break
 
     if out_file:
-        for piece_index in sorted(client.pieces):
+        for piece_index in range(client.torrent.num_pieces):
             await asyncio.to_thread(stdlib_write, client._read_piece(piece_index), out_file, "ab")

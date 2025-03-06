@@ -30,7 +30,6 @@ class Client:
         self.trackers: list[Tracker] | None = None
         self.peer_addresses: set[tuple[str, int]] | None = None
         self.peers: dict[tuple[str, int], Peer] = {}
-        self.pieces: dict[int, bytes] = {}
         self.event_pieces = asyncio.Event()
 
     @classmethod
@@ -60,6 +59,12 @@ class Client:
         client = cls(torrent_info, client_id, client_reserved, client_ext_support)
         client.trackers = Tracker.from_magnet(magnet_link, client_id, unknown_length=unknown_length)
         return client
+
+    def get_bitfield(self, piece_index: int) -> bool:
+        assert self.client_bitfield is not None
+        bitfield_index = piece_index // 8
+        byte_mask = 1 << (7 - piece_index % 8)
+        return (self.client_bitfield[bitfield_index] & byte_mask) != 0
 
     def set_bitfield(self, piece_index: int) -> None:
         assert self.client_bitfield is not None
@@ -165,17 +170,16 @@ class Client:
             if peer.event_bitfield.is_set() and peer.get_bitfield_piece(piece_index):
                 piece = await peer.get_piece(piece_index)
                 if piece is not None:
-                    self.pieces[piece_index] = piece
                     self._write_piece(piece_index, piece)
                     self.set_bitfield(piece_index)
                     break
 
-        if piece_index in self.pieces:
+        if self.get_bitfield(piece_index):
             for peer in self.peers.values():
                 if peer.event_pieces.is_set():
                     await peer.send_have(piece_index)
 
-        return piece_index in self.pieces
+        return self.get_bitfield(piece_index)
 
     async def get_all(self) -> bool:
         assert self.torrent.num_pieces is not None
@@ -183,6 +187,6 @@ class Client:
         await asyncio.gather(*[self.get_piece(piece_index) for piece_index in range(self.torrent.num_pieces)])
 
         return (
-            len([piece_index for piece_index in range(self.torrent.num_pieces) if piece_index in self.pieces])
+            len([piece_index for piece_index in range(self.torrent.num_pieces) if self.get_bitfield(piece_index)])
             == self.torrent.num_pieces
         )
