@@ -119,14 +119,18 @@ class Client:
     async def wait_peer(self) -> None:
         if self.peer_addresses is None:
             await self.init_peers()
-        while not any(peer.event_bitfield.is_set() for peer in self.peers.values()):
-            await asyncio.sleep(0)
+        await asyncio.wait(
+            (asyncio.create_task(peer.event_bitfield.wait()) for peer in self.peers.values()),
+            return_when=asyncio.FIRST_COMPLETED,
+        )
 
     async def wait_metadata(self) -> None:
         await self.wait_peer()
 
-        while not any(peer.event_metadata.is_set() for peer in self.peers.values()):
-            await asyncio.sleep(0)
+        await asyncio.wait(
+            (asyncio.create_task(peer.event_metadata.wait()) for peer in self.peers.values()),
+            return_when=asyncio.FIRST_COMPLETED,
+        )
 
         if self.torrent.num_pieces == 0:
             for peer in self.peers.values():
