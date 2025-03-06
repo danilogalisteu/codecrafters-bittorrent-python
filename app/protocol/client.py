@@ -32,6 +32,8 @@ class Client:
         self.peers: dict[tuple[str, int], Peer] = {}
         self.event_pieces = asyncio.Event()
 
+        self._load_torrent()
+
     @classmethod
     def from_torrent(
         cls,
@@ -127,6 +129,13 @@ class Client:
         if not torrent_path.exists() or overwrite:
             return self.torrent.to_file(torrent_path)
         return None
+
+    def _load_torrent(self) -> None:
+        torrent_path = self._get_torrent_path()
+        if torrent_path.exists():
+            torrent_info = TorrentInfo.from_file(torrent_path)
+            assert torrent_info is not None
+            self.torrent = torrent_info
 
     def _get_file_path(self, file_info: FileInfo) -> pathlib.Path:
         return self.download_folder / file_info.path
