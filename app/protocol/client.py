@@ -75,6 +75,12 @@ class Client:
         byte_mask = 1 << (7 - piece_index % 8)
         self.client_bitfield[bitfield_index] |= byte_mask
 
+    def clear_bitfield(self, piece_index: int) -> None:
+        assert self.client_bitfield is not None
+        bitfield_index = piece_index // 8
+        byte_mask = 1 << (7 - piece_index % 8)
+        self.client_bitfield[bitfield_index] &= ~byte_mask
+
     async def get_peers(self) -> None:
         if self.peer_addresses is None:
             self.peer_addresses = set()
@@ -197,14 +203,13 @@ class Client:
         piece_hash = self.torrent.pieces_hash[piece_index * 20 : (piece_index + 1) * 20]
         return hashlib.sha1(piece).digest() == piece_hash
 
-    def _check_pieces(self) -> bool:
+    def _check_pieces(self) -> None:
         assert self.torrent.num_pieces
         for piece_index in range(self.torrent.num_pieces):
             if self._check_piece(piece_index):
                 self.set_bitfield(piece_index)
             else:
-                return False
-        return True
+                self.clear_bitfield(piece_index)
 
     async def get_piece(self, piece_index: int) -> bool:
         if self.get_bitfield(piece_index):
