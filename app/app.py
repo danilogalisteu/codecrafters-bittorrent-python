@@ -57,7 +57,7 @@ async def run_handshake(torrent_file: str, peer_address: str, client_id: bytes) 
 
 async def run_download_piece(piece_file: str, piece_index: int, torrent_file: str, client_id: bytes) -> None:
     client = Client.from_torrent(torrent_file, client_id)
-    await client.wait_pieces()
+    await client.wait_peer()
 
     while True:
         await asyncio.sleep(0)
@@ -70,7 +70,7 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
 
 async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> None:
     client = Client.from_torrent(torrent_file, client_id)
-    await client.wait_pieces()
+    await client.wait_peer()
 
     while True:
         await asyncio.sleep(0)
@@ -99,7 +99,7 @@ async def run_magnet_handshake(magnet_link: str, client_id: bytes) -> None:
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     client = Client.from_magnet(magnet_link, client_id, extension_reserved, extension_support)
-    await client.wait_pieces()
+    await client.wait_metadata()
 
     for peer in client.peers.values():
         await peer.event_extension.wait()
@@ -119,7 +119,7 @@ async def run_magnet_info(magnet_link: str, client_id: bytes) -> None:
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     client = Client.from_magnet(magnet_link, client_id, extension_reserved, extension_support)
-    await client.wait_pieces()
+    await client.wait_metadata()
 
     for peer in client.peers.values():
         await peer.event_metadata.wait()
@@ -149,7 +149,7 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     client = Client.from_magnet(magnet_link, client_id, extension_reserved, extension_support)
-    await client.wait_pieces()
+    await client.wait_metadata()
 
     while True:
         await asyncio.sleep(0)
@@ -165,7 +165,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
     extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
     client = Client.from_magnet(magnet_link, client_id, extension_reserved, extension_support)
-    await client.wait_pieces()
+    await client.wait_metadata()
 
     while True:
         await asyncio.sleep(0)

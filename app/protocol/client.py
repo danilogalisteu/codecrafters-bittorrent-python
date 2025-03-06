@@ -116,9 +116,12 @@ class Client:
             (0).to_bytes(math.ceil(self.torrent.num_pieces / 8), byteorder="big", signed=False),
         )
 
-    async def wait_pieces(self) -> None:
+    async def wait_peer(self) -> None:
         if self.peer_addresses is None:
             await self.init_peers()
+
+    async def wait_metadata(self) -> None:
+        await self.wait_peer()
 
         while not self.event_pieces.is_set():
             await asyncio.sleep(0)
