@@ -104,7 +104,7 @@ class Client:
                 ).run_task()
 
     def _init_bitfield(self) -> None:
-        assert self.torrent.num_pieces
+        assert self.torrent.num_pieces > 0
         self.client_bitfield = bytearray(
             (0).to_bytes(math.ceil(self.torrent.num_pieces / 8), byteorder="big", signed=False),
         )
@@ -135,7 +135,7 @@ class Client:
         return self.download_folder.parent / f"{self.torrent.info_hash.hex()}.torrent"
 
     def _save_torrent(self, overwrite: bool = False) -> int | None:
-        assert self.torrent.num_pieces is not None
+        assert self.torrent.num_pieces > 0
         torrent_path = self._get_torrent_path()
         torrent_path.parent.mkdir(parents=True, exist_ok=True)
         if not torrent_path.exists() or overwrite:
@@ -171,7 +171,7 @@ class Client:
                 file_path.write_bytes(b"\x00" * file_info.length)
 
     def _write_piece(self, piece_index: int, piece: bytes) -> int:
-        assert self.torrent.num_pieces
+        assert self.torrent.num_pieces > 0
         piece_offset = piece_index * self.torrent.piece_length
         piece_start = 0
         for file_info in self.torrent.find_piece(piece_index):
@@ -186,7 +186,7 @@ class Client:
         return piece_start
 
     def _read_piece(self, piece_index: int) -> bytes:
-        assert self.torrent.num_pieces
+        assert self.torrent.num_pieces > 0
         piece_offset = piece_index * self.torrent.piece_length
         piece = bytearray()
         for file_info in self.torrent.find_piece(piece_index):
@@ -204,7 +204,7 @@ class Client:
         return hashlib.sha1(piece).digest() == piece_hash
 
     def _check_pieces(self) -> None:
-        assert self.torrent.num_pieces
+        assert self.torrent.num_pieces > 0
         for piece_index in range(self.torrent.num_pieces):
             if self._check_piece(piece_index):
                 self.set_bitfield(piece_index)
@@ -231,7 +231,7 @@ class Client:
         return self.get_bitfield(piece_index)
 
     async def get_all(self) -> bool:
-        assert self.torrent.num_pieces is not None
+        assert self.torrent.num_pieces > 0
 
         await asyncio.gather(
             *[
