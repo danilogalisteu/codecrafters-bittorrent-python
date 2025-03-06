@@ -105,6 +105,7 @@ class Client:
                     break
 
         self._save_torrent()
+        self._init_files()
 
         for peer in self.peers.values():
             if not peer.event_pieces.is_set():
@@ -114,46 +115,50 @@ class Client:
     def _get_torrent_path(self) -> pathlib.Path:
         return self.download_folder.parent / f"{self.torrent.info_hash.hex()}.torrent"
 
-    def _save_torrent(self) -> int | None:
+    def _save_torrent(self, overwrite: bool = False) -> int | None:
         assert self.torrent.num_pieces is not None
         torrent_path = self._get_torrent_path()
-        return self.torrent.to_file(torrent_path)
-
-    def _get_piece_path(self, piece_index: int) -> pathlib.Path:
-        assert self.torrent.num_pieces is not None
-        num_digits = int(math.floor(math.log10(self.torrent.num_pieces)))
-        piece_index_str = str(piece_index).zfill(num_digits)
-        return self.download_folder / f"{piece_index_str}.piece"
-
-    def _save_piece(self, piece_index: int) -> int:
-        piece_path = self._get_piece_path(piece_index)
-        piece_path.parent.mkdir(parents=True, exist_ok=True)
-        return piece_path.write_bytes(self.pieces[piece_index])
+        torrent_path.parent.mkdir(parents=True, exist_ok=True)
+        if not torrent_path.exists() or overwrite:
+            return self.torrent.to_file(torrent_path)
+        return None
 
     def _get_file_path(self, file_info: FileInfo) -> pathlib.Path:
-        return self.completed_folder / file_info.path
+        return self.download_folder / file_info.path
 
-    def _save_file(self, file_info: FileInfo) -> int:
-        assert self.torrent.piece_length is not None
-        file_path = self._get_file_path(file_info)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+    def _init_files(self) -> None:
+        assert self.torrent.files
+        for file_info in self.torrent.files:
+            file_path = self._get_file_path(file_info)
+            if not file_path.exists():
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.write_bytes(b"\x00" * file_info.length)
 
-        file_length_remaining = file_info.length
-        file_length_saved = 0
-        with file_path.open("wb") as fp:
-            for file_index, piece_index in enumerate(sorted(file_info.pieces)):
-                if file_index == 0:
-                    piece_offset = file_info.offset - piece_index * self.torrent.piece_length
-                    piece_length = min(self.torrent.piece_length - piece_offset, file_info.length)
-                    piece_data = self.pieces[piece_index][piece_offset : piece_offset + piece_length]
-                    file_length_saved += fp.write(piece_data)
-                    file_length_remaining -= piece_length
-                else:
-                    piece_length = min(file_length_remaining, self.torrent.piece_length)
-                    file_length_saved += fp.write(self.pieces[piece_index][0:piece_length])
-                    file_length_remaining -= piece_length
+    def _write_piece(self, piece_index: int, piece: bytes) -> int:
+        piece_offset = piece_index * self.torrent.piece_length
+        piece_start = 0
+        for file_info in self.torrent.find_piece(piece_index):
+            file_path = self._get_file_path(file_info)
+            file_start = piece_offset - file_info.offset
+            write_length = min(self.torrent.piece_length, file_info.length - file_start)
+            with file_path.open("r+b") as fp:
+                fp.seek(file_start)
+                fp.write(piece[piece_start : piece_start + write_length])
+            piece_offset += write_length
+            piece_start += write_length
+        return piece_start
 
-        return file_length_saved
+    def _read_piece(self, piece_index: int) -> bytes:
+        piece_offset = piece_index * self.torrent.piece_length
+        piece = bytearray()
+        for file_info in self.torrent.find_piece(piece_index):
+            file_path = self._get_file_path(file_info)
+            file_start = piece_offset - file_info.offset
+            read_length = min(self.torrent.piece_length, file_info.length - file_start)
+            with file_path.open("rb") as fp:
+                fp.seek(file_start)
+                piece.extend(fp.read(read_length))
+        return bytes(piece)
 
     async def get_piece(self, piece_index: int) -> bool:
         for peer in self.peers.values():
@@ -161,6 +166,7 @@ class Client:
                 piece = await peer.get_piece(piece_index)
                 if piece is not None:
                     self.pieces[piece_index] = piece
+                    self._write_piece(piece_index, piece)
                     self.set_bitfield(piece_index)
                     break
 
@@ -169,8 +175,6 @@ class Client:
                 if peer.event_pieces.is_set():
                     await peer.send_have(piece_index)
 
-            self._save_piece(piece_index)
-
         return piece_index in self.pieces
 
     async def get_all(self) -> bool:
@@ -178,13 +182,7 @@ class Client:
 
         await asyncio.gather(*[self.get_piece(piece_index) for piece_index in range(self.torrent.num_pieces)])
 
-        is_complete = (
+        return (
             len([piece_index for piece_index in range(self.torrent.num_pieces) if piece_index in self.pieces])
             == self.torrent.num_pieces
         )
-
-        if is_complete:
-            for file_info in self.torrent.files:
-                self._save_file(file_info)
-
-        return is_complete

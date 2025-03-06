@@ -65,7 +65,7 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
             break
 
     if piece_file:
-        await asyncio.to_thread(stdlib_write, client.pieces[piece_index], piece_file, "wb")
+        await asyncio.to_thread(stdlib_write, client._read_piece(piece_index), piece_file, "wb")
 
 
 async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> None:
@@ -79,7 +79,7 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
 
     if out_file:
         for piece_index in sorted(client.pieces):
-            await asyncio.to_thread(stdlib_write, client.pieces[piece_index], out_file, "ab")
+            await asyncio.to_thread(stdlib_write, client._read_piece(piece_index), out_file, "ab")
 
 
 async def run_magnet_parse(magnet_link: str) -> None:
@@ -155,7 +155,7 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
             break
 
     if piece_file:
-        await asyncio.to_thread(stdlib_write, client.pieces[piece_index], piece_file, "wb")
+        await asyncio.to_thread(stdlib_write, client._read_piece(piece_index), piece_file, "wb")
 
 
 async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes) -> None:
@@ -172,4 +172,4 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
 
     if out_file:
         for piece_index in sorted(client.pieces):
-            await asyncio.to_thread(stdlib_write, client.pieces[piece_index], out_file, "ab")
+            await asyncio.to_thread(stdlib_write, client._read_piece(piece_index), out_file, "ab")
