@@ -74,6 +74,11 @@ class TorrentMeta:
 
         return files, file_offset
 
+    def find_piece(self, piece_index: int) -> list[FileInfo]:
+        assert piece_index >= 0
+        assert piece_index < self.num_pieces
+        return [file_info for file_info in self.files if piece_index in file_info.pieces]
+
     def update_info(self, metadata: bytes) -> None:
         assert self.info_hash == hashlib.sha1(metadata).digest()
         meta_info, _ = decode_bencode(metadata, 0)
