@@ -40,9 +40,9 @@ class TorrentMeta:
         display_name = meta_info.get("name", "")
         num_pieces = len(meta_info["pieces"]) // 20
         piece_length = meta_info["piece length"]
-        total_length = meta_info["length"]
 
         if "length" in meta_info:
+            total_length = meta_info["length"]
             return [
                 FileInfo(path=display_name, length=total_length, offset=0, pieces=list(range(num_pieces))),
             ], total_length
