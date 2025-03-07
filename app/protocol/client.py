@@ -194,7 +194,7 @@ class Client:
         piece_start = 0
         for file_info in self.torrent.find_piece(piece_index):
             file_path = self._get_file_path(file_info)
-            file_start = piece_offset - file_info.offset
+            file_start = max(piece_offset - file_info.offset, 0)
             write_length = min(self.torrent.piece_length, file_info.length - file_start)
             with file_path.open("r+b") as fp:
                 fp.seek(file_start)
@@ -209,7 +209,7 @@ class Client:
         piece = bytearray()
         for file_info in self.torrent.find_piece(piece_index):
             file_path = self._get_file_path(file_info)
-            file_start = piece_offset - file_info.offset
+            file_start = max(piece_offset - file_info.offset, 0)
             read_length = min(self.torrent.piece_length, file_info.length - file_start)
             with file_path.open("rb") as fp:
                 fp.seek(file_start)
