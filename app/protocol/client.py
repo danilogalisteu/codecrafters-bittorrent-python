@@ -126,7 +126,27 @@ class Client(FileManager):
 
     async def _comm_trackers(self) -> None:
         while not self._abort:
-            await asyncio.sleep(1)
+            dt_now = datetime.now(UTC)
+            min_next = min(tracker.next_announce for tracker in self.trackers)
+            if min_next > dt_now:
+                await asyncio.sleep((min_next - dt_now).total_seconds())
+
+            pending = {
+                asyncio.create_task(tracker.get_peers()) for tracker in self.trackers if tracker.next_announce <= dt_now
+            }
+
+            for timeout in [5, 20, 35]:
+                if pending:
+                    done, pending = await asyncio.wait(
+                        pending,
+                        timeout=timeout,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    for task_peer_addresses in done:
+                        self.peer_addresses.update(task_peer_addresses.result())
+
+            for task in pending:
+                task.cancel()
 
     async def _comm_peers(self) -> None:
         while not self._abort:
