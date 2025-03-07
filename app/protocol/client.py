@@ -161,7 +161,7 @@ class Client(FileManager):
 
         for peer in self.peers.values():
             if peer.event_bitfield.is_set() and peer.get_bitfield_piece(piece_index):
-                piece = await peer.get_piece(piece_index)
+                piece = await peer.download_piece(piece_index)
                 if piece is not None:
                     self._write_piece(piece_index, piece)
                     self.set_bitfield(piece_index)

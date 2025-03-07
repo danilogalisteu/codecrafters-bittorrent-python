@@ -323,7 +323,42 @@ class Peer:
     def abort(self) -> None:
         self._abort = True
 
-    async def get_piece(self, piece_index: int) -> bytes | None:
+    async def _fetch_block(self, index: int, begin: int, length: int) -> bytes:
+        await self.send_request(index, begin, length)
+
+        r_block = b""
+        while True:
+            r_index, r_begin, r_block = await self._recv_queue.get()
+            if r_index == index and r_begin == begin and len(r_block) == length:
+                break
+            await self._recv_queue.put((r_index, r_begin, r_block))
+
+        return r_block
+
+    async def _fetch_piece(self, piece_index: int) -> bytes:
+        piece_length = (
+            self.torrent.piece_length if piece_index < self.torrent.num_pieces - 1 else self.torrent.last_piece_length
+        )
+        assert piece_length > 0
+        piece = bytearray(piece_length)
+
+        self._recv_length = 4 * 1024
+        chunk_length = 16 * 1024
+        block_begin = 0
+        while block_begin < piece_length:
+            block_length = min(chunk_length, piece_length - block_begin)
+            piece[block_begin : block_begin + block_length] = await self._fetch_block(
+                piece_index,
+                block_begin,
+                block_length,
+            )
+            block_begin += block_length
+
+        self._recv_length = 1024
+
+        return piece
+
+    async def download_piece(self, piece_index: int) -> bytes | None:
         if (
             (not self.event_pieces.is_set())
             or (piece_index < 0 or piece_index >= self.torrent.num_pieces)
@@ -336,34 +371,10 @@ class Peer:
 
         await self.event_am_unchoke.wait()
 
-        piece_length = (
-            self.torrent.piece_length if piece_index < self.torrent.num_pieces - 1 else self.torrent.last_piece_length
-        )
-        assert piece_length > 0
+        r_piece = await self._fetch_piece(piece_index)
+        r_piece_hash = hashlib.sha1(r_piece).digest()
 
-        piece = b""
-        self._recv_length = 4 * 1024
-        chunk_length = 16 * 1024
-        current_begin = 0
-        while current_begin < piece_length:
-            eff_chunk_length = min(chunk_length, piece_length - current_begin)
-
-            await self.send_request(piece_index, current_begin, eff_chunk_length)
-
-            while True:
-                await asyncio.sleep(0)
-                if not self._recv_queue.empty():
-                    r_index, r_begin, r_block = await self._recv_queue.get()
-                    if r_index == piece_index and r_begin == current_begin:
-                        piece += r_block
-                        current_begin += len(r_block)
-                        break
-                    await self._recv_queue.put((r_index, r_begin, r_block))
-
-        self._recv_length = 1024
-
-        r_piece_hash = hashlib.sha1(piece).digest()
         if r_piece_hash == self.torrent.pieces_hash[piece_index * 20 : piece_index * 20 + 20]:
-            return piece
+            return r_piece
 
         return None
