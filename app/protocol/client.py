@@ -152,6 +152,18 @@ class Client(FileManager):
         while not self._abort:
             await asyncio.sleep(1)
 
+            # init local data
+            if self.torrent.num_pieces == 0:
+                for peer in self.peers.values():
+                    if peer.event_pieces.is_set():
+                        self.torrent = copy.deepcopy(peer.torrent)
+                        self._init_bitfield()
+                        break
+
+                if self.torrent.num_pieces > 0:
+                    self._save_torrent()
+                    self._init_files()
+                    self._check_pieces()
     async def _comm_download(self) -> None:
         while not self._abort:
             await self.event_connected.wait()
