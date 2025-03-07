@@ -164,6 +164,18 @@ class Client(FileManager):
                     self._save_torrent()
                     self._init_files()
                     self._check_pieces()
+
+            # init new peers
+            for address in self.peer_addresses:
+                if address not in self.peers:
+                    self.peers[address] = Peer(
+                        address,
+                        self.torrent,
+                        self.client_id,
+                        self.client_reserved,
+                        self.client_ext_support,
+                    ).run_task()
+
     async def _comm_download(self) -> None:
         while not self._abort:
             await self.event_connected.wait()
