@@ -183,6 +183,15 @@ class Client(FileManager):
     async def _comm_download(self) -> None:
         while not self._abort:
             await self.event_connected.wait()
+
+            if self.event_files.is_set():
+                missing_pieces = [
+                    piece_index for piece_index in range(self.torrent.num_pieces) if not self.get_bitfield(piece_index)
+                ]
+                if len(missing_pieces) == 0:
+                    self.event_complete.set()
+                    break
+
             await asyncio.sleep(1)
 
     async def _comm_task(self) -> None:
