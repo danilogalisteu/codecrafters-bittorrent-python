@@ -174,7 +174,7 @@ class TorrentInfo(TorrentMeta):
         if self.created_by:
             metadata["created by"] = self.created_by
         if self.creation_date != datetime.min:
-            metadata["creation date"] = self.creation_date.timestamp()
+            metadata["creation date"] = int(self.creation_date.timestamp())
 
         metadata["info"] = {}
         if self.name:
