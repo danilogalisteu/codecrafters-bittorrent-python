@@ -41,6 +41,8 @@ class Client(FileManager):
         self._load_torrent()
 
         if self.torrent.num_pieces > 0:
+            if not self._get_torrent_path().exists():
+                self._save_torrent()
             self._init_bitfield()
             self._init_files()
             self._check_pieces()
