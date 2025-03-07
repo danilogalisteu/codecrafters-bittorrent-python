@@ -154,7 +154,7 @@ class Client(FileManager):
     def abort(self) -> None:
         self._abort = True
 
-    async def get_piece(self, piece_index: int) -> bool:
+    async def download_piece(self, piece_index: int) -> bool:
         if self.get_bitfield(piece_index):
             return True
 
@@ -173,12 +173,12 @@ class Client(FileManager):
 
         return self.get_bitfield(piece_index)
 
-    async def get_all(self) -> bool:
+    async def download_all(self) -> bool:
         assert self.torrent.num_pieces > 0
 
         await asyncio.gather(
             *[
-                self.get_piece(piece_index)
+                self.download_piece(piece_index)
                 for piece_index in range(self.torrent.num_pieces)
                 if not self.get_bitfield(piece_index)
             ],

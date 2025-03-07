@@ -61,7 +61,7 @@ async def run_download_piece(piece_file: str, piece_index: int, torrent_file: st
 
     while True:
         await asyncio.sleep(0)
-        if await client.get_piece(piece_index):
+        if await client.download_piece(piece_index):
             break
 
     if piece_file:
@@ -74,7 +74,7 @@ async def run_download(out_file: str, torrent_file: str, client_id: bytes) -> No
 
     while True:
         await asyncio.sleep(0)
-        if await client.get_all():
+        if await client.download_all():
             break
 
     if out_file:
@@ -153,7 +153,7 @@ async def run_magnet_piece(piece_file: str, piece_index: int, magnet_link: str, 
 
     while True:
         await asyncio.sleep(0)
-        if await client.get_piece(piece_index):
+        if await client.download_piece(piece_index):
             break
 
     if piece_file:
@@ -169,7 +169,7 @@ async def run_magnet_download(out_file: str, magnet_link: str, client_id: bytes)
 
     while True:
         await asyncio.sleep(0)
-        if await client.get_all():
+        if await client.download_all():
             break
 
     if out_file:
