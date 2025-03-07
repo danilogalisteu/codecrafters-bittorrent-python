@@ -78,6 +78,7 @@ class Client(FileManager):
     async def init_peers(self) -> None:
         if self.peer_addresses is None:
             await self.get_peers()
+        assert self.peer_addresses is not None
 
         for address in self.peer_addresses:
             if self.peers.get(address, None) is None:
