@@ -32,7 +32,14 @@ class Client:
         self.trackers: list[Tracker] | None = None
         self.peer_addresses: set[tuple[str, int]] | None = None
         self.peers: dict[tuple[str, int], Peer] = {}
+
+        self._task: asyncio.Task[None] | None = None
+        self._running: bool = False
+        self._abort: bool = False
+        self._peer_request_cancellations: dict[tuple[str, int], list[tuple[int, int, int]]] = {}
+
         self.event_pieces = asyncio.Event()
+        self.event_complete = asyncio.Event()
 
         self._load_torrent()
 
@@ -147,6 +154,39 @@ class Client:
             if not peer.event_pieces.is_set():
                 peer.torrent = self.torrent
                 peer.event_pieces.set()
+
+    async def _comm_trackers(self) -> None:
+        while not self._abort:
+            await asyncio.sleep(1)
+
+    async def _comm_peers(self) -> None:
+        while not self._abort:
+            await asyncio.sleep(1)
+
+    async def _comm_task(self) -> None:
+        await self.wait_peer()
+        if self.torrent.num_pieces == 0:
+            await self.wait_metadata()
+
+        self._abort = False
+        self._running = True
+
+        async with asyncio.TaskGroup() as tg:
+            _ = tg.create_task(self._comm_trackers())
+            _ = tg.create_task(self._comm_peers())
+
+        self._running = False
+
+    def run_task(self) -> Self:
+        self._task = asyncio.create_task(self._comm_task())
+        return self
+
+    def cancel_task(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+
+    def abort(self) -> None:
+        self._abort = True
 
     def _get_torrent_path(self) -> pathlib.Path:
         return self.download_folder.parent / f"{self.torrent.info_hash.hex()}.torrent"
