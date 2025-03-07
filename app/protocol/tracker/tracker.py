@@ -1,4 +1,5 @@
 import asyncio
+from datetime import UTC, datetime, timedelta
 from typing import Any, Self
 from urllib.parse import urlencode, urlparse
 
@@ -35,6 +36,7 @@ class Tracker:
         self.interval: int | None = None
         self.leechers: int | None = None
         self.seeders: int | None = None
+        self.next_announce: datetime = datetime.min
 
     @classmethod
     def from_torrent(cls, torrent_file: str, client_id: bytes) -> Self:
@@ -110,6 +112,7 @@ class Tracker:
             try:
                 async with asyncio.timeout(self.timeout * 2**n_retry):
                     await get_peers_cb()
+                    self.next_announce = datetime.now(UTC) + timedelta(seconds=self.interval)
                     break
             except TimeoutError:
                 if n_retry < n_retry_max:
