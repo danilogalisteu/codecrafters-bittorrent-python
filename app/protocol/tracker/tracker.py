@@ -36,7 +36,7 @@ class Tracker:
         self.interval: float = 0.0
         self.leechers: int | None = None
         self.seeders: int | None = None
-        self.next_announce: datetime = datetime.min
+        self.next_announce: datetime = datetime.min.replace(tzinfo=UTC)
 
     @classmethod
     def from_torrent(cls, torrent_file: str, client_id: bytes) -> Self:
