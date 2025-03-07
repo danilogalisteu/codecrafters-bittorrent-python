@@ -35,6 +35,9 @@ class Client(FileManager):
         self._abort: bool = False
         self._peer_request_cancellations: dict[tuple[str, int], list[tuple[int, int, int]]] = {}
 
+        self.event_connected = asyncio.Event()
+        self.event_failed = asyncio.Event()
+
         self._load_torrent()
 
         if self.torrent.num_pieces > 0:
@@ -127,18 +130,26 @@ class Client(FileManager):
         while not self._abort:
             await asyncio.sleep(1)
 
-    async def _comm_task(self) -> None:
-        await self.wait_peer()
-        if self.torrent.num_pieces == 0:
-            await self.wait_metadata()
+    async def _comm_download(self) -> None:
+        while not self._abort:
+            await self.event_connected.wait()
+            await asyncio.sleep(1)
 
+    async def _comm_task(self) -> None:
         self._abort = False
         self._running = True
 
-        async with asyncio.TaskGroup() as tg:
-            _ = tg.create_task(self._comm_trackers())
-            _ = tg.create_task(self._comm_peers())
+        # unless DHT is implemented, we need to get peers from trackers
+        if len(self.trackers) > 0:
+            async with asyncio.TaskGroup() as tg:
+                _ = tg.create_task(self._comm_trackers())
+                _ = tg.create_task(self._comm_peers())
+                _ = tg.create_task(self._comm_download())
+        else:
+            print("No trackers available, aborting...")
+            self.event_failed.set()
 
+        self._abort = False
         self._running = False
 
     def run_task(self) -> Self:
