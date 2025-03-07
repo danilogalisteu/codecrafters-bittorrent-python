@@ -50,6 +50,7 @@ class Peer:
         self._recv_length: int = 1024
         self._send_queue: asyncio.Queue[tuple[MsgID, bytes]] = asyncio.Queue()
         self._recv_queue: asyncio.Queue[tuple[int, int, bytes]] = asyncio.Queue()
+        self.peer_requests: set[tuple[int, int, int]] = set()
 
         self.event_am_interested = asyncio.Event()
         self.event_am_unchoke = asyncio.Event()
@@ -242,9 +243,11 @@ class Peer:
             case MsgID.INTERESTED:
                 assert len(recv_payload) == 0
                 self.event_is_interested.set()
+                await self.send_is_unchoke()
             case MsgID.NOTINTERESTED:
                 assert len(recv_payload) == 0
                 self.event_is_interested.clear()
+                await self.send_is_choke()
             case MsgID.HAVE:
                 assert len(recv_payload) == 4
                 piece_index = struct.unpack("!I", recv_payload[0:4])[0]
@@ -254,20 +257,16 @@ class Peer:
                 self.event_bitfield.set()
             case MsgID.REQUEST:
                 assert len(recv_payload) == 12
-                # TODO handle request
-                # index, begin, length = struct.unpack("!III", recv_payload)
+                index, begin, length = struct.unpack("!III", recv_payload)
+                self.peer_requests.add((index, begin, length))
             case MsgID.PIECE:
                 assert len(recv_payload) > 8
                 index, begin, block = struct.unpack(f"!II{len(recv_payload) - 8}s", recv_payload)
                 await self._recv_queue.put((index, begin, block))
             case MsgID.CANCEL:
                 assert len(recv_payload) == 12
-                # TODO handle request
-                # index, begin, length = struct.unpack("!III", recv_payload)
-            case MsgID.PORT:
-                assert len(recv_payload) == 2
-                # TODO handle request
-                # port = struct.unpack("!H", recv_payload)
+                index, begin, length = struct.unpack("!III", recv_payload)
+                self.peer_requests.discard((index, begin, length))
             case MsgID.EXTENSION:
                 assert len(recv_payload) > 1
                 await self._parse_extension(recv_payload[0], recv_payload[1:])
