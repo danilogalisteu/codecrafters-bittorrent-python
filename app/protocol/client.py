@@ -192,6 +192,26 @@ class Client(FileManager):
                     self.event_complete.set()
                     break
 
+                # get available pieces
+                piece_count: dict[int, int] = {piece_index: 0 for piece_index in missing_pieces}
+                for peer in self.peers.values():
+                    if peer.event_bitfield.is_set():
+                        for piece_index in missing_pieces:
+                            if peer.get_bitfield_piece(piece_index):
+                                piece_count[piece_index] += 1
+
+                # sort by least available
+                sorted_pieces = sorted(piece_count, key=lambda p: piece_count[p])
+                for peer in self.peers.values():
+                    peer_pieces = [
+                        piece
+                        for piece in sorted_pieces
+                        if peer.event_bitfield.is_set() and peer.get_bitfield_piece(piece)
+                    ]
+                    if len(peer_pieces) > 0:
+                        next_piece = peer_pieces.pop(0)
+                        sorted_pieces.remove(next_piece)
+
             await asyncio.sleep(1)
 
     async def _comm_task(self) -> None:
