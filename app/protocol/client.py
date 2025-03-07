@@ -180,6 +180,21 @@ class Client(FileManager):
             if not self.event_connected.is_set() and any(peer.event_bitfield.is_set() for peer in self.peers.values()):
                 self.event_connected.set()
 
+            # handle requests
+            for peer in self.peers.values():
+                try:
+                    index, begin, length = peer.peer_requests.pop()
+                except KeyError:
+                    pass
+                else:
+                    assert index >= 0
+                    assert index < self.torrent.num_pieces
+                    assert begin < self.torrent.piece_length
+                    assert length <= self.torrent.piece_length - begin
+                    if self.get_bitfield(index):
+                        block = self._read_piece(index)[begin : begin + length]
+                        await peer.send_piece(index, begin, block)
+
     async def _comm_download(self) -> None:
         while not self._abort:
             await self.event_connected.wait()
