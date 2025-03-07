@@ -176,6 +176,10 @@ class Client(FileManager):
                         self.client_ext_support,
                     ).run_task()
 
+            # update connection status
+            if not self.event_connected.is_set() and any(peer.event_bitfield.is_set() for peer in self.peers.values()):
+                self.event_connected.set()
+
     async def _comm_download(self) -> None:
         while not self._abort:
             await self.event_connected.wait()
