@@ -97,7 +97,6 @@ class Client:
 
     async def init_peers(self) -> None:
         if self.peer_addresses is None:
-            self.peer_addresses = set()
             await self.get_peers()
 
         for address in self.peer_addresses:
