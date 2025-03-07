@@ -1,5 +1,6 @@
 import asyncio
 import copy
+from datetime import UTC, datetime
 from typing import Any, Self
 
 from .files import FileManager
@@ -13,6 +14,7 @@ class Client(FileManager):
         self,
         torrent: TorrentInfo,
         client_id: bytes,
+        trackers: list[Tracker] | None = None,
         client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
         client_ext_support: dict[str | bytes, Any] | None = None,
         download_folder: str = "./download",
@@ -24,8 +26,8 @@ class Client(FileManager):
         self.client_reserved = client_reserved
         self.client_ext_support = client_ext_support
 
-        self.trackers: list[Tracker] | None = None
-        self.peer_addresses: set[tuple[str, int]] | None = None
+        self.trackers: list[Tracker] = trackers if trackers is not None else []
+        self.peer_addresses: set[tuple[str, int]] = set()
         self.peers: dict[tuple[str, int], Peer] = {}
 
         self._task: asyncio.Task[None] | None = None
@@ -50,9 +52,8 @@ class Client(FileManager):
     ) -> Self:
         torrent_info = TorrentInfo.from_file(torrent_file)
         assert torrent_info is not None
-        client = cls(torrent_info, client_id, client_reserved, client_ext_support)
-        client.trackers = [Tracker(torrent_info.tracker, torrent_info.info_hash, torrent_info.total_length, client_id)]
-        return client
+        trackers = [Tracker(torrent_info.tracker, torrent_info.info_hash, torrent_info.total_length, client_id)]
+        return cls(torrent_info, client_id, trackers, client_reserved, client_ext_support)
 
     @classmethod
     def from_magnet(
@@ -64,21 +65,16 @@ class Client(FileManager):
         unknown_length: int = 1024,
     ) -> Self:
         torrent_info = TorrentInfo.from_magnet(magnet_link)
-        client = cls(torrent_info, client_id, client_reserved, client_ext_support)
-        client.trackers = Tracker.from_magnet(magnet_link, client_id, unknown_length=unknown_length)
-        return client
+        trackers = Tracker.from_magnet(magnet_link, client_id, unknown_length=unknown_length)
+        return cls(torrent_info, client_id, trackers, client_reserved, client_ext_support)
 
     async def get_peers(self) -> None:
-        if self.peer_addresses is None:
-            self.peer_addresses = set()
-        if self.trackers is not None:
-            for addresses in await asyncio.gather(*[tracker.get_peers() for tracker in self.trackers]):
-                self.peer_addresses.update(addresses)
+        for addresses in await asyncio.gather(*[tracker.get_peers() for tracker in self.trackers]):
+            self.peer_addresses.update(addresses)
 
     async def init_peers(self) -> None:
-        if self.peer_addresses is None:
+        if len(self.peer_addresses) == 0:
             await self.get_peers()
-        assert self.peer_addresses is not None
 
         for address in self.peer_addresses:
             if self.peers.get(address, None) is None:
@@ -91,8 +87,9 @@ class Client(FileManager):
                 ).run_task()
 
     async def wait_peer(self) -> None:
-        if self.peer_addresses is None:
+        if len(self.peer_addresses) == 0:
             await self.init_peers()
+
         await asyncio.wait(
             (asyncio.create_task(peer.event_bitfield.wait()) for peer in self.peers.values()),
             return_when=asyncio.FIRST_COMPLETED,
