@@ -223,6 +223,9 @@ class Client(FileManager):
                         if piece is not None:
                             self._write_piece(piece_index, piece)
                             self.set_bitfield(piece_index)
+                            for peer in self.peers.values():
+                                if peer.event_bitfield.is_set():
+                                    await peer.send_have(piece_index)
 
             await asyncio.sleep(1)
 
