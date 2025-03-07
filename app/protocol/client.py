@@ -202,6 +202,7 @@ class Client(FileManager):
 
                 # sort by least available
                 sorted_pieces = sorted(piece_count, key=lambda p: piece_count[p])
+                download_tasks = {}
                 for peer in self.peers.values():
                     peer_pieces = [
                         piece
@@ -211,6 +212,17 @@ class Client(FileManager):
                     if len(peer_pieces) > 0:
                         next_piece = peer_pieces.pop(0)
                         sorted_pieces.remove(next_piece)
+                        download_tasks[next_piece] = peer.download_piece(next_piece)
+
+                # download pieces
+                if download_tasks:
+                    download_pieces = dict(
+                        zip(download_tasks.keys(), await asyncio.gather(*download_tasks.values()), strict=True),
+                    )
+                    for piece_index, piece in download_pieces.items():
+                        if piece is not None:
+                            self._write_piece(piece_index, piece)
+                            self.set_bitfield(piece_index)
 
             await asyncio.sleep(1)
 
