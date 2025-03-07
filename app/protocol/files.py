@@ -18,7 +18,6 @@ class FileManager:
         self.download_folder = pathlib.Path(download_folder) / self.torrent.info_hash.hex()
         self.completed_folder = pathlib.Path(completed_folder) / self.torrent.info_hash.hex()
 
-        self.event_bitfield = asyncio.Event()
         self.event_files = asyncio.Event()
         self.event_complete = asyncio.Event()
 
@@ -55,22 +54,21 @@ class FileManager:
         self.bitfield = bytearray(
             (0).to_bytes(math.ceil(self.torrent.num_pieces / 8), byteorder="big", signed=False),
         )
-        self.event_bitfield.set()
 
     def get_bitfield(self, piece_index: int) -> bool:
-        assert self.event_bitfield.is_set()
+        assert self.bitfield is not None
         bitfield_index = piece_index // 8
         byte_mask = 1 << (7 - piece_index % 8)
         return (self.bitfield[bitfield_index] & byte_mask) != 0
 
     def set_bitfield(self, piece_index: int) -> None:
-        assert self.event_bitfield.is_set()
+        assert self.bitfield is not None
         bitfield_index = piece_index // 8
         byte_mask = 1 << (7 - piece_index % 8)
         self.bitfield[bitfield_index] |= byte_mask
 
     def clear_bitfield(self, piece_index: int) -> None:
-        assert self.event_bitfield.is_set()
+        assert self.bitfield is not None
         bitfield_index = piece_index // 8
         byte_mask = 1 << (7 - piece_index % 8)
         self.bitfield[bitfield_index] &= ~byte_mask
@@ -79,7 +77,7 @@ class FileManager:
         return self.download_folder / file_info.path
 
     def _init_files(self) -> None:
-        assert self.torrent.files
+        assert self.torrent.num_pieces > 0
         for file_info in self.torrent.files:
             file_path = self._get_file_path(file_info)
             if not file_path.exists():
