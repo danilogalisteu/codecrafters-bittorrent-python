@@ -33,7 +33,7 @@ class Tracker:
         self.timeout = 15.0
         self.connection_id: int | None = None
         self.peer_addresses: list[tuple[str, int]] | None = None
-        self.interval: int | None = None
+        self.interval: float = 0.0
         self.leechers: int | None = None
         self.seeders: int | None = None
         self.next_announce: datetime = datetime.min
@@ -74,7 +74,9 @@ class Tracker:
             assert "peers" in res
             assert "interval" in res
             self.peer_addresses = peer_list_from_bytes(res["peers"])
-            self.interval = res["interval"]
+            self.interval = float(res["interval"])
+            self.leechers = res.get("incomplete", 0)
+            self.seeders = res.get("complete", 0)
         else:
             raise TypeError(f"unhandled tracker response:\n{res!r}")
 

@@ -54,7 +54,7 @@ async def announce_udp(
     left: int,
     uploaded: int,
     client_key: int = 0,
-) -> tuple[int, int, int, bytes]:
+) -> tuple[float, int, int, bytes]:
     transaction_id = random.randrange(-(2**31), 2**31)
     send_data = struct.pack("!qii", connection_id, UDPAction.ANNOUNCE.value, transaction_id)
     send_data += info_hash
@@ -75,4 +75,4 @@ async def announce_udp(
     recv_action, recv_transaction_id, interval, leechers, seeders = struct.unpack("!iiiii", recv_data[:20])
     assert recv_transaction_id == transaction_id
     assert recv_action == UDPAction.ANNOUNCE.value
-    return interval, leechers, seeders, recv_data[20:]
+    return float(interval), leechers, seeders, recv_data[20:]
