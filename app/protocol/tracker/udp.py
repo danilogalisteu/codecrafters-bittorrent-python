@@ -14,9 +14,9 @@ import struct
 from urllib.parse import urlparse
 
 from app.protocol import address_from_str, address_list_from_bytes
+from app.protocol.datagram import send_recv_udp_data
 
 from .announce import UDP_ANNOUNCE_DICT, AnnounceEvent, UDPAction
-from .datagram import send_recv_udp_data
 
 UDP_TRACKER_PROTOCOL_ID = int("0x41727101980", 16)
 
