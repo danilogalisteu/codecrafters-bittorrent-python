@@ -37,5 +37,4 @@ async def send_recv_udp_data(address: tuple[str, int], send_data: bytes) -> byte
     finally:
         transport.close()
     assert udp_sender.recv_data is not None
-    assert len(udp_sender.recv_data) >= 16
     return udp_sender.recv_data
