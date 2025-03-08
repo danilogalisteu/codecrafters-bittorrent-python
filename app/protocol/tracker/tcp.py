@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import aiohttp
 
-from app.protocol import TCP_ANNOUNCE_DICT, AnnounceEvent, peer_list_from_bytes
+from app.protocol import TCP_ANNOUNCE_DICT, AnnounceEvent, address_list_from_bytes
 from app.protocol.bencode import decode_bencode
 
 
@@ -53,6 +53,6 @@ async def announce_tcp(
 
     # BEP 0023
     if isinstance(res["peers"], bytes):
-        res["peers"] = peer_list_from_bytes(res["peers"])
+        res["peers"] = address_list_from_bytes(res["peers"])
 
     return float(res["interval"]), res.get("incomplete", 0), res.get("complete", 0), res["peers"]

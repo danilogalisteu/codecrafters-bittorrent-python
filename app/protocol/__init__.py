@@ -45,13 +45,13 @@ TCP_ANNOUNCE_DICT = {
 }
 
 
-def address_str_to_tuple(address: str) -> tuple[str, int]:
+def address_from_str(address: str) -> tuple[str, int]:
     assert ":" in address
     ip, port = address.split(":")
     return ip, int(port)
 
 
-def peer_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
+def address_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
     pos = 0
     peers = []
     while pos < len(peers_bytes):

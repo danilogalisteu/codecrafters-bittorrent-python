@@ -4,7 +4,7 @@ import pathlib
 import socket
 from typing import Any
 
-from .protocol import address_str_to_tuple
+from .protocol import address_from_str
 from .protocol.bencode import decode_bencode
 from .protocol.client import Client
 from .protocol.metainfo import TorrentInfo
@@ -42,7 +42,7 @@ async def run_peers(torrent_file: str, client_id: bytes) -> None:
 
 
 async def run_handshake(torrent_file: str, peer_address: str, client_id: bytes) -> None:
-    peer = address_str_to_tuple(peer_address)
+    peer = address_from_str(peer_address)
     torrent_info = TorrentInfo.from_file(torrent_file)
     assert torrent_info is not None
 
