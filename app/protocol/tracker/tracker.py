@@ -94,12 +94,8 @@ class Tracker:
             raise TypeError(f"unhandled tracker response:\n{res!r}")
 
     async def _get_peers_udp(self) -> None:
-        url_info = urlparse(self.url)
-        tracker_address = address_str_to_tuple(url_info.netloc)
-        self.connection_id = await connect_udp(tracker_address)
         self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(
-            tracker_address,
-            self.connection_id,
+            urlparse(self.url).netloc,
             self.info_hash,
             self.client_id,
             self.port,

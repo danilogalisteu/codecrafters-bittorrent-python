@@ -13,6 +13,8 @@ import enum
 import random
 import struct
 
+from app.protocol import address_str_to_tuple
+
 from .datagram import send_recv_udp_data
 
 UDP_TRACKER_PROTOCOL_ID = int("0x41727101980", 16)
@@ -45,8 +47,7 @@ async def connect_udp(address: tuple[str, int]) -> int:
 
 
 async def announce_udp(
-    address: tuple[str, int],
-    connection_id: int,
+    url: str,
     info_hash: bytes,
     client_id: bytes,
     client_port: int,
@@ -56,6 +57,9 @@ async def announce_udp(
     event: UDPEvent = UDPEvent.NONE,
     client_key: int = 0,
 ) -> tuple[float, int, int, bytes]:
+    address = address_str_to_tuple(url)
+    connection_id = await connect_udp(address)
+
     transaction_id = random.randrange(-(2**31), 2**31)
     send_data = struct.pack("!qii", connection_id, UDPAction.ANNOUNCE.value, transaction_id)
     send_data += info_hash
@@ -73,7 +77,9 @@ async def announce_udp(
     )
     recv_data = await send_recv_udp_data(address, send_data)
     assert len(recv_data) >= 20
+
     recv_action, recv_transaction_id, interval, leechers, seeders = struct.unpack("!iiiii", recv_data[:20])
     assert recv_transaction_id == transaction_id
     assert recv_action == UDPAction.ANNOUNCE.value
+
     return float(interval), leechers, seeders, recv_data[20:]
