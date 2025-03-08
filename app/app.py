@@ -37,7 +37,8 @@ async def run_info(torrent_file: str) -> None:
 async def run_peers(torrent_file: str, client_id: bytes) -> None:
     tracker = Tracker.from_torrent(torrent_file, client_id)
     _ = await tracker.get_peers()
-    tracker.print_peers()
+    for address in tracker.peer_addresses:
+        print(f"{address[0]}:{address[1]}")
 
 
 async def run_handshake(torrent_file: str, peer_address: str, client_id: bytes) -> None:

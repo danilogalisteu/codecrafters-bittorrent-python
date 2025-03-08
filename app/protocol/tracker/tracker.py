@@ -83,8 +83,3 @@ class Tracker:
                 break
 
         return self.peer_addresses or []
-
-    def print_peers(self) -> None:
-        assert self.peer_addresses is not None
-        for address in self.peer_addresses:
-            print(f"{address[0]}:{address[1]}")
