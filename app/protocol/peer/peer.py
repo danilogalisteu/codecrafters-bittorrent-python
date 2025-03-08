@@ -41,8 +41,8 @@ class Peer:
         self.peer_ext_meta_size: int | None = None
         self.peer_ext_meta_data: dict[int, bytes] | None = None
 
+        self.is_running: bool = False
         self._task: asyncio.Task[None] | None = None
-        self._running: bool = False
         self._abort: bool = False
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
@@ -304,13 +304,13 @@ class Peer:
         await self._ext_handshake()
 
         self._abort = False
-        self._running = True
+        self.is_running = True
 
         async with asyncio.TaskGroup() as tg:
             _ = tg.create_task(self._comm_recv())
             _ = tg.create_task(self._comm_send())
 
-        self._running = False
+        self.is_running = False
 
     def run_task(self) -> Self:
         self._task = asyncio.create_task(self._comm_task())

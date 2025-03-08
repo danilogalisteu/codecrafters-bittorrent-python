@@ -32,8 +32,8 @@ class Client(FileManager):
 
         self.uploaded_length: int = 0
 
+        self.is_running: bool = False
         self._task: asyncio.Task[None] | None = None
-        self._running: bool = False
         self._abort: bool = False
 
         self.event_connected = asyncio.Event()
@@ -258,7 +258,7 @@ class Client(FileManager):
 
     async def _comm_task(self) -> None:
         self._abort = False
-        self._running = True
+        self.is_running = True
 
         # unless DHT is implemented, we need to get peers from trackers
         if len(self.trackers) > 0:
@@ -271,7 +271,7 @@ class Client(FileManager):
             self.event_failed.set()
 
         self._abort = False
-        self._running = False
+        self.is_running = False
 
     def run_task(self) -> Self:
         self._task = asyncio.create_task(self._comm_task())
