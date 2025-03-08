@@ -82,7 +82,6 @@ class Tracker:
                         self.uploaded_length,
                         event,
                     )
-                    break
             except TimeoutError:
                 if n_retry < n_retry_max:
                     print(f"Tracker '{self.url}' is not responding, trying again...")
@@ -93,6 +92,7 @@ class Tracker:
             else:
                 self.peer_addresses = peer_list_from_bytes(peers_bytes)
                 self.next_announce = datetime.now(UTC) + timedelta(seconds=self.interval)
+                break
 
         return self.peer_addresses or []
 
