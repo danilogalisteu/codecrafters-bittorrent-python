@@ -10,7 +10,7 @@ from app.protocol import address_str_to_tuple
 from app.protocol.bencode import decode_bencode
 from app.protocol.metainfo import TorrentInfo
 
-from .messages import announce_udp, connect_udp
+from .udp import announce_udp, connect_udp
 
 
 class TCPEvent(enum.StrEnum):
