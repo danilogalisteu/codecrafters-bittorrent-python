@@ -55,11 +55,11 @@ async def announce_udp(
     left: int,
     uploaded: int,
     event: UDPEvent = UDPEvent.NONE,
-    client_key: int = 0,
 ) -> tuple[float, int, int, bytes]:
     address = address_str_to_tuple(url)
     connection_id = await connect_udp(address)
 
+    client_key = hash(client_id)
     transaction_id = random.randrange(-(2**31), 2**31)
     send_data = struct.pack("!qii", connection_id, UDPAction.ANNOUNCE.value, transaction_id)
     send_data += info_hash
