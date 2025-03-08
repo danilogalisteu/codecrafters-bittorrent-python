@@ -1,8 +1,8 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Self
-from urllib.parse import urlparse
 
+from app.protocol import AnnounceEvent
 from app.protocol.metainfo import TorrentInfo
 
 from .tcp import announce_tcp
@@ -50,35 +50,11 @@ class Tracker:
         tracker_list = torrent_info.tracker_list[0]
         return [cls(url, torrent_info.info_hash, unknown_length, client_id) for url in tracker_list]
 
-    async def _get_peers_tcp(self) -> None:
-        self.interval, self.leechers, self.seeders, peers_bytes = await announce_tcp(
-            self.url,
-            self.info_hash,
-            self.client_id,
-            self.port,
-            self.downloaded_length,
-            self.total_length - self.downloaded_length,
-            self.uploaded_length,
-        )
-        self.peer_addresses = peer_list_from_bytes(peers_bytes)
-
-    async def _get_peers_udp(self) -> None:
-        self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(
-            urlparse(self.url).netloc,
-            self.info_hash,
-            self.client_id,
-            self.port,
-            self.downloaded_length,
-            self.total_length - self.downloaded_length,
-            self.uploaded_length,
-        )
-        self.peer_addresses = peer_list_from_bytes(peers_bytes)
-
-    async def get_peers(self, n_retry_max: int = 9) -> list[tuple[str, int]]:
+    async def get_peers(self, event: AnnounceEvent = AnnounceEvent.NONE, n_retry_max: int = 9) -> list[tuple[str, int]]:
         if self.url.startswith("http"):
-            get_peers_cb = self._get_peers_tcp
+            announce_cb = announce_tcp
         elif self.url.startswith("udp"):
-            get_peers_cb = self._get_peers_udp
+            announce_cb = announce_udp
         elif self.url.startswith("wss"):
             # TODO handle wss protocol
             print(f"unhandled tracker protocol {self.url}")
@@ -91,8 +67,16 @@ class Tracker:
         while True:
             try:
                 async with asyncio.timeout(self.timeout * 2**n_retry):
-                    await get_peers_cb()
-                    self.next_announce = datetime.now(UTC) + timedelta(seconds=self.interval)
+                    self.interval, self.leechers, self.seeders, peers_bytes = await announce_cb(
+                        self.url,
+                        self.info_hash,
+                        self.client_id,
+                        self.port,
+                        self.downloaded_length,
+                        self.total_length - self.downloaded_length,
+                        self.uploaded_length,
+                        event,
+                    )
                     break
             except TimeoutError:
                 if n_retry < n_retry_max:
@@ -101,6 +85,9 @@ class Tracker:
                 else:
                     print(f"Tracker '{self.url}' is not active...")
                     break
+            else:
+                self.peer_addresses = peer_list_from_bytes(peers_bytes)
+                self.next_announce = datetime.now(UTC) + timedelta(seconds=self.interval)
 
         return self.peer_addresses or []
 

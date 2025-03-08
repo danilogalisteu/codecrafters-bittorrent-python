@@ -1,17 +1,10 @@
-import enum
 from typing import Any
 from urllib.parse import urlencode
 
 import aiohttp
 
+from app.protocol import TCP_ANNOUNCE_DICT, AnnounceEvent
 from app.protocol.bencode import decode_bencode
-
-
-class TCPEvent(enum.StrEnum):
-    EMPTY = "empty"
-    COMPLETED = "completed"
-    STARTED = "started"
-    STOPPED = "stopped"
 
 
 async def announce_tcp(
@@ -22,7 +15,7 @@ async def announce_tcp(
     downloaded: int,
     left: int,
     uploaded: int,
-    event: TCPEvent = TCPEvent.EMPTY,
+    event: AnnounceEvent = AnnounceEvent.NONE,
 ) -> tuple[float, int, int, bytes]:
     query = {
         "info_hash": info_hash,
@@ -33,8 +26,8 @@ async def announce_tcp(
         "left": left,
         "compact": 1,
     }
-    if event != TCPEvent.EMPTY:
-        query["event"] = event.value
+    if event != AnnounceEvent.NONE:
+        query["event"] = TCP_ANNOUNCE_DICT[event].value
 
     url = url + "?" + urlencode(query)
     res: dict[str | bytes, Any] | None = None

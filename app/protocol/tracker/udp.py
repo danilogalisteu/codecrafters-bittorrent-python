@@ -9,29 +9,15 @@ Bittorrent UDP-tracker protocol extension (for types)
 https://www.rasterbar.com/products/libtorrent/udp_tracker_protocol.html
 """
 
-import enum
 import random
 import struct
+from urllib.parse import urlparse
 
-from app.protocol import address_str_to_tuple
+from app.protocol import UDP_ANNOUNCE_DICT, AnnounceEvent, UDPAction, address_str_to_tuple
 
 from .datagram import send_recv_udp_data
 
 UDP_TRACKER_PROTOCOL_ID = int("0x41727101980", 16)
-
-
-class UDPAction(enum.IntEnum):
-    CONNECT = 0
-    ANNOUNCE = 1
-    SCRAPE = 2
-    ERROR = 3
-
-
-class UDPEvent(enum.IntEnum):
-    NONE = 0
-    COMPLETED = 1
-    STARTED = 2
-    STOPPED = 3
 
 
 async def connect_udp(address: tuple[str, int]) -> int:
@@ -54,9 +40,9 @@ async def announce_udp(
     downloaded: int,
     left: int,
     uploaded: int,
-    event: UDPEvent = UDPEvent.NONE,
+    event: AnnounceEvent = AnnounceEvent.NONE,
 ) -> tuple[float, int, int, bytes]:
-    address = address_str_to_tuple(url)
+    address = address_str_to_tuple(urlparse(url).netloc)
     connection_id = await connect_udp(address)
 
     client_key = hash(client_id)
@@ -69,7 +55,7 @@ async def announce_udp(
         downloaded,
         left,
         uploaded,
-        event.value,
+        UDP_ANNOUNCE_DICT[event].value,
         0,
         client_key,
         -1,
