@@ -30,6 +30,8 @@ class Client(FileManager):
         self.peer_addresses: set[tuple[str, int]] = set()
         self.peers: dict[tuple[str, int], Peer] = {}
 
+        self.uploaded_length: int = 0
+
         self._task: asyncio.Task[None] | None = None
         self._running: bool = False
         self._abort: bool = False
@@ -46,6 +48,7 @@ class Client(FileManager):
             self._init_bitfield()
             self._init_files()
             self._check_pieces()
+            self._update_trackers()
 
     @classmethod
     def from_torrent(
@@ -124,6 +127,13 @@ class Client(FileManager):
                 peer.torrent = self.torrent
                 peer.event_pieces.set()
 
+    def _update_trackers(self) -> None:
+        total, downloaded = self.get_sizes()
+        for tracker in self.trackers:
+            tracker.total_length = total
+            tracker.downloaded_length = downloaded
+            tracker.uploaded_length = self.uploaded_length
+
     async def _comm_trackers(self) -> None:
         while not self._abort:
             dt_now = datetime.now(UTC)
@@ -194,6 +204,8 @@ class Client(FileManager):
                     if self.get_bitfield(index):
                         block = self._read_piece(index)[begin : begin + length]
                         await peer.send_piece(index, begin, block)
+                        self.uploaded_length += length
+                        self._update_trackers()
 
     async def _comm_download(self) -> None:
         while not self._abort:
@@ -238,6 +250,7 @@ class Client(FileManager):
                         if piece is not None:
                             self._write_piece(piece_index, piece)
                             self.set_bitfield(piece_index)
+                            self._update_trackers()
                             for peer in self.peers.values():
                                 if peer.event_bitfield.is_set():
                                     await peer.send_have(piece_index)
