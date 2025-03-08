@@ -4,7 +4,7 @@ import pathlib
 import socket
 from typing import Any
 
-from .protocol import address_from_str
+from .protocol import address_from_str, address_to_str
 from .protocol.bencode import decode_bencode
 from .protocol.client import Client
 from .protocol.metainfo import TorrentInfo
@@ -38,7 +38,7 @@ async def run_peers(torrent_file: str, client_id: bytes) -> None:
     tracker = Tracker.from_torrent(torrent_file, client_id)
     _ = await tracker.get_peers()
     for address in tracker.peer_addresses:
-        print(f"{address[0]}:{address[1]}")
+        print(address_to_str(address))
 
 
 async def run_handshake(torrent_file: str, peer_address: str, client_id: bytes) -> None:

@@ -7,6 +7,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Self
 
+from app.protocol import address_to_str
 from app.protocol.metainfo import TorrentInfo
 
 from .announce import AnnounceEvent
@@ -86,4 +87,4 @@ class Tracker:
     def show_info(self) -> None:
         print(f"Tracker: {self.url} [L: {self.leechers}, S: {self.seeders}, Int: {self.interval} s]")
         print(f"Next announce: {self.next_announce.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-        print("Peers:", ", ".join(f"{addr[0]}:{addr[1]}" for addr in self.peer_addresses))
+        print("Peers:", ", ".join(f"{address_to_str(addr)}" for addr in self.peer_addresses))
