@@ -4,12 +4,15 @@ def address_from_str(address: str) -> tuple[str, int]:
     return ip, int(port)
 
 
-def address_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
-    pos = 0
-    peers = []
-    while pos < len(peers_bytes):
-        peer_ip = ".".join(map(str, peers_bytes[pos : pos + 4]))
-        peer_port = int.from_bytes(peers_bytes[pos + 4 : pos + 6], "big")
-        peers.append((peer_ip, peer_port))
-        pos += 6
-    return peers
+def address_to_str(address: tuple[str, int]) -> str:
+    return f"{address[0]}:{address[1]}"
+
+
+def address_from_bytes(address: bytes) -> tuple[str, int]:
+    assert len(address) == 6
+    return ".".join(map(str, address[:4])), int.from_bytes(address[4:], "big")
+
+
+def address_list_from_bytes(addresses: bytes) -> list[tuple[str, int]]:
+    assert len(addresses) % 6 == 0
+    return [address_from_bytes(addresses[i : i + 6]) for i in range(0, len(addresses), 6)]
