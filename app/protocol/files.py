@@ -130,7 +130,11 @@ class FileManager:
         total = 0
         downloaded = 0
         for piece_index in range(self.torrent.num_pieces):
-            piece_length = self.torrent.piece_length if piece_index < self.torrent.num_pieces - 1 else self.torrent.last_piece_length
+            piece_length = (
+                self.torrent.piece_length
+                if piece_index < self.torrent.num_pieces - 1
+                else self.torrent.last_piece_length
+            )
             total += piece_length
             downloaded += piece_length if self.get_bitfield(piece_index) else 0
         return total, downloaded
