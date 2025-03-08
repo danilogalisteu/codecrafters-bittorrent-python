@@ -11,8 +11,10 @@ from urllib.parse import urlencode
 
 import aiohttp
 
-from app.protocol import TCP_ANNOUNCE_DICT, AnnounceEvent, address_list_from_bytes
+from app.protocol import address_list_from_bytes
 from app.protocol.bencode import decode_bencode
+
+from .announce import TCP_ANNOUNCE_DICT, AnnounceEvent
 
 
 async def announce_tcp(

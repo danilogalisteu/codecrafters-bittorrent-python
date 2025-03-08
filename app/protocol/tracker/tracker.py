@@ -7,9 +7,9 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Self
 
-from app.protocol import AnnounceEvent
 from app.protocol.metainfo import TorrentInfo
 
+from .announce import AnnounceEvent
 from .tcp import announce_tcp
 from .udp import announce_udp
 
