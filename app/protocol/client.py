@@ -35,7 +35,6 @@ class Client(FileManager):
         self._task: asyncio.Task[None] | None = None
         self._running: bool = False
         self._abort: bool = False
-        self._peer_request_cancellations: dict[tuple[str, int], list[tuple[int, int, int]]] = {}
 
         self.event_connected = asyncio.Event()
         self.event_failed = asyncio.Event()
