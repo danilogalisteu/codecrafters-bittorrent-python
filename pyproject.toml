@@ -4,12 +4,17 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "aiohttp[speedups]>=3.11.11",
-]
+dependencies = ["aiohttp[speedups]>=3.11.11"]
 
 [dependency-groups]
-dev = [
-    "mypy>=1.14.1",
-    "ruff>=0.9.6",
-]
+dev = ["mypy>=1.14.1", "ruff>=0.9.6", "vulture>=2.14"]
+
+[tool.vulture]
+exclude = []
+ignore_decorators = []
+ignore_names = []
+make_whitelist = false
+min_confidence = 50
+paths = ["app"]
+sort_by_size = true
+verbose = false
