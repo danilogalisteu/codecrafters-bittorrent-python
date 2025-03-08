@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 import aiohttp
 
-from app.protocol import TCP_ANNOUNCE_DICT, AnnounceEvent
+from app.protocol import TCP_ANNOUNCE_DICT, AnnounceEvent, peer_list_from_bytes
 from app.protocol.bencode import decode_bencode
 
 
@@ -24,7 +24,7 @@ async def announce_tcp(
     left: int,
     uploaded: int,
     event: AnnounceEvent = AnnounceEvent.NONE,
-) -> tuple[float, int, int, bytes]:
+) -> tuple[float, int, int, list[tuple[str, int]]]:
     query = {
         "info_hash": info_hash,
         "peer_id": client_id,
@@ -50,4 +50,9 @@ async def announce_tcp(
     # BEP0003
     assert "peers" in res
     assert "interval" in res
+
+    # BEP 0023
+    if isinstance(res["peers"], bytes):
+        res["peers"] = peer_list_from_bytes(res["peers"])
+
     return float(res["interval"]), res.get("incomplete", 0), res.get("complete", 0), res["peers"]

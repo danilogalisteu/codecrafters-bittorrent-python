@@ -14,17 +14,6 @@ from .tcp import announce_tcp
 from .udp import announce_udp
 
 
-def peer_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
-    pos = 0
-    peers = []
-    while pos < len(peers_bytes):
-        peer_ip = ".".join(map(str, peers_bytes[pos : pos + 4]))
-        peer_port = int.from_bytes(peers_bytes[pos + 4 : pos + 6], "big")
-        peers.append((peer_ip, peer_port))
-        pos += 6
-    return peers
-
-
 class Tracker:
     def __init__(self, url: str, info_hash: bytes, total_length: int, client_id: bytes) -> None:
         self.url = url
@@ -72,7 +61,7 @@ class Tracker:
         while True:
             try:
                 async with asyncio.timeout(self.timeout * 2**n_retry):
-                    self.interval, self.leechers, self.seeders, peers_bytes = await announce_cb(
+                    self.interval, self.leechers, self.seeders, self.peer_addresses = await announce_cb(
                         self.url,
                         self.info_hash,
                         self.client_id,
@@ -90,7 +79,6 @@ class Tracker:
                     print(f"Tracker '{self.url}' is not active...")
                     break
             else:
-                self.peer_addresses = peer_list_from_bytes(peers_bytes)
                 self.next_announce = datetime.now(UTC) + timedelta(seconds=self.interval)
                 break
 

@@ -13,7 +13,7 @@ import random
 import struct
 from urllib.parse import urlparse
 
-from app.protocol import UDP_ANNOUNCE_DICT, AnnounceEvent, UDPAction, address_str_to_tuple
+from app.protocol import UDP_ANNOUNCE_DICT, AnnounceEvent, UDPAction, address_str_to_tuple, peer_list_from_bytes
 
 from .datagram import send_recv_udp_data
 
@@ -41,7 +41,7 @@ async def announce_udp(
     left: int,
     uploaded: int,
     event: AnnounceEvent = AnnounceEvent.NONE,
-) -> tuple[float, int, int, bytes]:
+) -> tuple[float, int, int, list[tuple[str, int]]]:
     address = address_str_to_tuple(urlparse(url).netloc)
     connection_id = await connect_udp(address)
 
@@ -68,4 +68,4 @@ async def announce_udp(
     assert recv_transaction_id == transaction_id
     assert recv_action == UDPAction.ANNOUNCE.value
 
-    return float(interval), leechers, seeders, recv_data[20:]
+    return float(interval), leechers, seeders, peer_list_from_bytes(recv_data[20:])
