@@ -200,7 +200,7 @@ class TorrentInfo(TorrentMeta):
                 if file.crc32:
                     file_info["crc32"] = file.crc32
                 if file.mtime != datetime.min:
-                    file_info["mtime"] = int(file.mtime.timestamp())
+                    file_info["mtime"] = str(int(file.mtime.timestamp()))
 
                 metadata["info"]["files"].append(file_info)
         else:
