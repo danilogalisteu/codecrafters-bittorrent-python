@@ -82,3 +82,8 @@ class Tracker:
                 break
 
         return self.peer_addresses
+
+    def show_info(self) -> None:
+        print(f"Tracker: {self.url} [L: {self.leechers}, S: {self.seeders}, Int: {self.interval} s]")
+        print(f"Next announce: {self.next_announce.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        print("Peers:", ", ".join(map(lambda addr: f"{addr[0]}:{addr[1]}", self.peer_addresses)))

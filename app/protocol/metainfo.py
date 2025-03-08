@@ -218,7 +218,7 @@ class TorrentInfo(TorrentMeta):
     def show_info(self) -> None:
         print(f"Tracker URL: {self.tracker}")
         print(f"Display name: {self.name}")
-        print(f"Length: {self.files[0].length}")
+        print(f"Length: {self.total_length}")
         print(f"Info Hash: {self.info_hash.hex()}")
         print(f"Piece Length: {self.piece_length}")
         print("Piece Hashes:")
