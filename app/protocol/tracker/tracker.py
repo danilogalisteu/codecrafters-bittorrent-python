@@ -1,23 +1,12 @@
 import asyncio
-import enum
 from datetime import UTC, datetime, timedelta
-from typing import Any, Self
-from urllib.parse import urlencode, urlparse
+from typing import Self
+from urllib.parse import urlparse
 
-import aiohttp
-
-from app.protocol import address_str_to_tuple
-from app.protocol.bencode import decode_bencode
 from app.protocol.metainfo import TorrentInfo
 
-from .udp import announce_udp, connect_udp
-
-
-class TCPEvent(enum.StrEnum):
-    EMPTY = "empty"
-    COMPLETED = "completed"
-    STARTED = "started"
-    STOPPED = "stopped"
+from .tcp import announce_tcp
+from .udp import announce_udp
 
 
 def peer_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
@@ -61,37 +50,17 @@ class Tracker:
         tracker_list = torrent_info.tracker_list[0]
         return [cls(url, torrent_info.info_hash, unknown_length, client_id) for url in tracker_list]
 
-    async def _get_peers_tcp(self, event: TCPEvent = TCPEvent.EMPTY) -> None:
-        query = {
-            "info_hash": self.info_hash,
-            "peer_id": self.client_id,
-            "port": self.port,
-            "uploaded": self.uploaded_length,
-            "downloaded": self.downloaded_length,
-            "left": self.total_length - self.downloaded_length,
-            "compact": 1,
-        }
-        if event != TCPEvent.EMPTY:
-            query["event"] = event.value
-
-        url = self.url + "?" + urlencode(query)
-        res: dict[str | bytes, Any] | None = None
-        async with aiohttp.ClientSession() as session, session.get(url) as response:
-            data, _ = decode_bencode(await response.read())
-            assert isinstance(data, dict)
-            res = data
-
-        self.peer_addresses = []
-        if isinstance(res, dict):
-            # BEP0003
-            assert "peers" in res
-            assert "interval" in res
-            self.peer_addresses = peer_list_from_bytes(res["peers"])
-            self.interval = float(res["interval"])
-            self.leechers = res.get("incomplete", 0)
-            self.seeders = res.get("complete", 0)
-        else:
-            raise TypeError(f"unhandled tracker response:\n{res!r}")
+    async def _get_peers_tcp(self) -> None:
+        self.interval, self.leechers, self.seeders, peers_bytes = await announce_tcp(
+            self.url,
+            self.info_hash,
+            self.client_id,
+            self.port,
+            self.downloaded_length,
+            self.total_length - self.downloaded_length,
+            self.uploaded_length,
+        )
+        self.peer_addresses = peer_list_from_bytes(peers_bytes)
 
     async def _get_peers_udp(self) -> None:
         self.interval, self.leechers, self.seeders, peers_bytes = await announce_udp(
