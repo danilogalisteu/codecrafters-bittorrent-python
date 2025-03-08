@@ -27,8 +27,10 @@ class Tracker:
     def __init__(self, url: str, info_hash: bytes, total_length: int, client_id: bytes) -> None:
         self.url = url
         self.info_hash = info_hash
-        self.total_length = total_length
         self.client_id = client_id
+        self.total_length = total_length
+        self.downloaded_length: int = 0
+        self.uploaded_length: int = 0
         self.port: int = 6881
         self.timeout = 15.0
         self.connection_id: int | None = None
@@ -56,9 +58,9 @@ class Tracker:
             "info_hash": self.info_hash,
             "peer_id": self.client_id,
             "port": self.port,
-            "uploaded": 0,
-            "downloaded": 0,
-            "left": self.total_length,
+            "uploaded": self.uploaded_length,
+            "downloaded": self.downloaded_length,
+            "left": self.total_length - self.downloaded_length,
             "compact": 1,
         }
         url = self.url + "?" + urlencode(query)
@@ -90,9 +92,9 @@ class Tracker:
             self.info_hash,
             self.client_id,
             self.port,
-            0,
-            self.total_length,
-            0,
+            self.downloaded_length,
+            self.total_length - self.downloaded_length,
+            self.uploaded_length,
         )
         self.peer_addresses = peer_list_from_bytes(peers_bytes)
 
