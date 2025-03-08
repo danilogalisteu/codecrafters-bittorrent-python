@@ -24,8 +24,7 @@ class Tracker:
         self.uploaded_length: int = 0
         self.port: int = 6881
         self.timeout = 15.0
-        self.connection_id: int | None = None
-        self.peer_addresses: list[tuple[str, int]] | None = None
+        self.peer_addresses: list[tuple[str, int]] = []
         self.interval: float = 0.0
         self.leechers: int | None = None
         self.seeders: int | None = None
@@ -82,4 +81,4 @@ class Tracker:
                 self.next_announce = datetime.now(UTC) + timedelta(seconds=self.interval)
                 break
 
-        return self.peer_addresses or []
+        return self.peer_addresses
