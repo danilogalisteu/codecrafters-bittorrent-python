@@ -53,6 +53,7 @@ async def announce_udp(
     downloaded: int,
     left: int,
     uploaded: int,
+    event: UDPEvent = UDPEvent.NONE,
     client_key: int = 0,
 ) -> tuple[float, int, int, bytes]:
     transaction_id = random.randrange(-(2**31), 2**31)
@@ -64,7 +65,7 @@ async def announce_udp(
         downloaded,
         left,
         uploaded,
-        UDPEvent.NONE.value,
+        event.value,
         0,
         client_key,
         -1,

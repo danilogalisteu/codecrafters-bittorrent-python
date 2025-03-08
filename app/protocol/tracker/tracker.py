@@ -1,4 +1,5 @@
 import asyncio
+import enum
 from datetime import UTC, datetime, timedelta
 from typing import Any, Self
 from urllib.parse import urlencode, urlparse
@@ -10,6 +11,13 @@ from app.protocol.bencode import decode_bencode
 from app.protocol.metainfo import TorrentInfo
 
 from .messages import announce_udp, connect_udp
+
+
+class TCPEvent(enum.StrEnum):
+    EMPTY = "empty"
+    COMPLETED = "completed"
+    STARTED = "started"
+    STOPPED = "stopped"
 
 
 def peer_list_from_bytes(peers_bytes: bytes) -> list[tuple[str, int]]:
@@ -53,7 +61,7 @@ class Tracker:
         tracker_list = torrent_info.tracker_list[0]
         return [cls(url, torrent_info.info_hash, unknown_length, client_id) for url in tracker_list]
 
-    async def _get_peers_tcp(self) -> None:
+    async def _get_peers_tcp(self, event: TCPEvent = TCPEvent.EMPTY) -> None:
         query = {
             "info_hash": self.info_hash,
             "peer_id": self.client_id,
@@ -63,6 +71,9 @@ class Tracker:
             "left": self.total_length - self.downloaded_length,
             "compact": 1,
         }
+        if event != TCPEvent.EMPTY:
+            query["event"] = event.value
+
         url = self.url + "?" + urlencode(query)
         res: dict[str | bytes, Any] | None = None
         async with aiohttp.ClientSession() as session, session.get(url) as response:
