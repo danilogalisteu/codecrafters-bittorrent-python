@@ -1,3 +1,8 @@
+"""
+Tracker Returns Compact Peer Lists
+https://www.bittorrent.org/beps/bep_0023.html
+"""
+
 import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Self

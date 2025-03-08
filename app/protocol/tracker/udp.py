@@ -2,8 +2,8 @@
 UDP Tracker Protocol for BitTorrent
 https://www.bittorrent.org/beps/bep_0015.html
 
-UDP Tracker Protocol Extensions
-https://bittorrent.org/beps/bep_0041.html
+Tracker Returns Compact Peer Lists
+https://www.bittorrent.org/beps/bep_0023.html
 
 Bittorrent UDP-tracker protocol extension (for types)
 https://www.rasterbar.com/products/libtorrent/udp_tracker_protocol.html

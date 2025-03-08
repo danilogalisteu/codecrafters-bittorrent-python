@@ -1,3 +1,11 @@
+"""
+The BitTorrent Protocol Specification
+https://www.bittorrent.org/beps/bep_0003.html
+
+Tracker Returns Compact Peer Lists
+https://www.bittorrent.org/beps/bep_0023.html
+"""
+
 from typing import Any
 from urllib.parse import urlencode
 
