@@ -101,6 +101,7 @@ class TorrentInfo(TorrentMeta):
     comment: str = ""
     created_by: str = ""
     creation_date: datetime = datetime.min
+    original: dict[str | bytes, Any] | None = None
 
     @classmethod
     def from_file(cls, file_name: str) -> Self | None:
@@ -112,6 +113,7 @@ class TorrentInfo(TorrentMeta):
             num_pieces = len(metainfo["info"]["pieces"]) // 20
             last_piece_length = total_length - (num_pieces - 1) * metainfo["info"]["piece length"]
             return cls(
+                original=metainfo,
                 tracker=metainfo.get("announce", ""),
                 tracker_list=metainfo.get("announce-list", []),
                 info_hash=hashlib.sha1(encode_bencode(metainfo["info"])).digest(),
@@ -162,6 +164,10 @@ class TorrentInfo(TorrentMeta):
         )
 
     def to_file(self, file_name: pathlib.Path) -> int | None:
+        if self.original is not None:
+            with file_name.open("wb") as fp:
+                return fp.write(encode_bencode(self.original))
+
         metadata: dict[str | bytes, Any] = {}
         if self.tracker:
             metadata["announce"] = self.tracker
