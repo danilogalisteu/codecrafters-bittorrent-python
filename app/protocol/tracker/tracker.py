@@ -31,6 +31,16 @@ class Tracker:
         self.seeders: int | None = None
         self.next_announce: datetime = datetime.min.replace(tzinfo=UTC)
 
+    def __str__(self) -> str:
+        return "\n".join(
+            [
+                f"Tracker: {self.url} [L: {self.leechers}, S: {self.seeders}, Int: {self.interval} s]",
+                f"Next announce: {self.next_announce.strftime('%Y-%m-%d %H:%M:%S %Z')}",
+                "Peers:",
+                ", ".join(f"{address_to_str(addr)}" for addr in self.peer_addresses),
+            ],
+        )
+
     @classmethod
     def from_torrent(cls, torrent_file: str, client_id: bytes) -> Self:
         torrent_info = TorrentInfo.from_file(torrent_file)
@@ -83,8 +93,3 @@ class Tracker:
                 break
 
         return self.peer_addresses
-
-    def show_info(self) -> None:
-        print(f"Tracker: {self.url} [L: {self.leechers}, S: {self.seeders}, Int: {self.interval} s]")
-        print(f"Next announce: {self.next_announce.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-        print("Peers:", ", ".join(f"{address_to_str(addr)}" for addr in self.peer_addresses))

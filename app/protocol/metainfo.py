@@ -35,6 +35,21 @@ class TorrentMeta:
     num_files: int = 0
     files: list[FileInfo] = field(default_factory=list)
 
+    def __str__(self) -> str:
+        return "\n".join(
+            [
+                f"Display name: {self.name}",
+                f"Length: {self.total_length}",
+                f"Info Hash: {self.info_hash.hex()}",
+                f"Piece Length: {self.piece_length}",
+                "Piece Hashes:",
+                *[
+                    self.pieces_hash[piece_index * 20 : piece_index * 20 + 20].hex()
+                    for piece_index in range(len(self.pieces_hash) // 20)
+                ],
+            ],
+        )
+
     @staticmethod
     def parse_files(meta_info: dict[str | bytes, Any]) -> tuple[list[FileInfo], int]:
         display_name = meta_info.get("name", "")
@@ -102,6 +117,14 @@ class TorrentInfo(TorrentMeta):
     created_by: str = ""
     creation_date: datetime = datetime.min
     original: dict[str | bytes, Any] | None = None
+
+    def __str__(self) -> str:
+        return "\n".join(
+            [
+                f"Tracker URL: {self.tracker}",
+                super().__str__(),
+            ],
+        )
 
     @classmethod
     def from_file(cls, file_name: str) -> Self | None:
@@ -214,13 +237,3 @@ class TorrentInfo(TorrentMeta):
 
         with file_name.open("wb") as fp:
             return fp.write(encode_bencode(metadata))
-
-    def show_info(self) -> None:
-        print(f"Tracker URL: {self.tracker}")
-        print(f"Display name: {self.name}")
-        print(f"Length: {self.total_length}")
-        print(f"Info Hash: {self.info_hash.hex()}")
-        print(f"Piece Length: {self.piece_length}")
-        print("Piece Hashes:")
-        for piece_index in range(len(self.pieces_hash) // 20):
-            print(self.pieces_hash[piece_index * 20 : piece_index * 20 + 20].hex())

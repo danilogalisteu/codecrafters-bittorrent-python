@@ -31,7 +31,7 @@ async def run_decode(value: str) -> None:
 async def run_info(torrent_file: str) -> None:
     torrent_info = TorrentInfo.from_file(torrent_file)
     assert torrent_info is not None
-    torrent_info.show_info()
+    print(torrent_info)
 
 
 async def run_peers(torrent_file: str, client_id: bytes) -> None:

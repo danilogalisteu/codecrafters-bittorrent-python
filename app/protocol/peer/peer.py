@@ -10,6 +10,7 @@ import math
 import struct
 from typing import Any, Self
 
+from app.protocol import address_to_str
 from app.protocol.bencode import decode_bencode, encode_bencode
 from app.protocol.metainfo import TorrentInfo
 
@@ -65,6 +66,17 @@ class Peer:
 
         if self.torrent.num_pieces > 0:
             self.event_pieces.set()
+
+    def __str__(self) -> str:
+        return "\n".join(
+            [
+                f"Peer: {address_to_str(self.address)}",
+                f"ID: {self.peer_id.hex() if self.peer_id else None}",
+                f"Bitfield: {self.peer_bitfield.hex() if self.peer_bitfield else None}",
+                f"Reserved: {self.peer_reserved.hex() if self.peer_reserved else None}",
+                f"Extension Support: {self.peer_ext_support if self.peer_ext_support else None}",
+            ],
+        )
 
     def get_bitfield_piece(self, piece_index: int) -> bool:
         assert self.peer_bitfield is not None
