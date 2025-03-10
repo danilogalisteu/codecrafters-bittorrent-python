@@ -1,7 +1,7 @@
 import asyncio
 
 
-class UDPSender(asyncio.DatagramProtocol):
+class UDPClient(asyncio.DatagramProtocol):
     def __init__(self, data: bytes, on_con_lost: asyncio.Future[bool]) -> None:
         self.send_data = data
         self.on_con_lost = on_con_lost
@@ -28,13 +28,13 @@ class UDPSender(asyncio.DatagramProtocol):
 async def send_recv_udp_data(address: tuple[str, int], send_data: bytes) -> bytes:
     loop = asyncio.get_running_loop()
     on_con_lost = loop.create_future()
-    transport, udp_sender = await loop.create_datagram_endpoint(
-        lambda: UDPSender(send_data, on_con_lost),
+    transport, udp_client = await loop.create_datagram_endpoint(
+        lambda: UDPClient(send_data, on_con_lost),
         remote_addr=address,
     )
     try:
         await on_con_lost
     finally:
         transport.close()
-    assert udp_sender.recv_data is not None
-    return udp_sender.recv_data
+    assert udp_client.recv_data is not None
+    return udp_client.recv_data
