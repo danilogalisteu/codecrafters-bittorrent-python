@@ -2,7 +2,6 @@ import asyncio
 import pathlib
 import secrets
 import sys
-from typing import Any
 
 
 async def bt_client(argument: str) -> None:
@@ -14,9 +13,7 @@ async def bt_client(argument: str) -> None:
     if torrent_file.is_file():
         client = Client.from_torrent(str(torrent_file), client_id).run_task()
     elif argument.startswith("magnet:"):
-        extension_reserved = (1 << 20).to_bytes(8, byteorder="big", signed=False)
-        extension_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
-        client = Client.from_magnet(argument, client_id, extension_reserved, extension_support).run_task()
+        client = Client.from_magnet(argument, client_id).run_task()
     else:
         print(f"Invalid argument: '{argument}'.\nExpected a torrent file or magnet link.")
         return
