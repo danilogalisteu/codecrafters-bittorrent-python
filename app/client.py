@@ -22,7 +22,7 @@ async def bt_client(argument: str) -> None:
         return
 
     await asyncio.wait(
-        [asyncio.create_task(client.event_complete.wait()), asyncio.create_task(client.event_failed.wait())],
+        [asyncio.create_task(evt.wait()) for evt in [client.event_complete, client.event_failed]],
         return_when=asyncio.FIRST_COMPLETED,
     )
     if client.event_failed.is_set():
