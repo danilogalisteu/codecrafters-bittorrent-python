@@ -36,11 +36,13 @@ class Peer:
         self.peer_id: bytes | None = None
         self.peer_bitfield: bytearray | None = None
         self.peer_reserved: bytes | None = None
-
         self.peer_ext_support: dict[str | bytes, Any] | None = None
+
         self.peer_ext_meta_id: int | None = None
         self.peer_ext_meta_size: int | None = None
         self.peer_ext_meta_data: dict[int, bytes] | None = None
+
+        self.peer_dht_port: int | None = None
 
         self.is_running: bool = False
         self._task: asyncio.Task[None] | None = None
@@ -279,6 +281,9 @@ class Peer:
                 assert len(recv_payload) == 12
                 index, begin, length = struct.unpack("!III", recv_payload)
                 self.peer_requests.discard((index, begin, length))
+            case MsgID.PORT:
+                assert len(recv_payload) == 2
+                self.peer_dht_port = struct.unpack("!H", recv_payload)[0]
             case MsgID.EXTENSION:
                 assert len(recv_payload) > 1
                 await self._parse_extension(recv_payload[0], recv_payload[1:])
