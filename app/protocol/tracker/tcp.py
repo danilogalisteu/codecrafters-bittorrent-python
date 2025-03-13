@@ -49,12 +49,23 @@ async def announce_tcp(
     if not isinstance(res, dict):
         raise TypeError(f"unhandled tracker response:\n{res!r}")
 
-    # BEP0003
-    assert "peers" in res
+    assert left == 0 or "peers" in res  # a tracker might send no peers when left = 0
     assert "interval" in res
 
-    # BEP 0023
-    if isinstance(res["peers"], bytes):
-        res["peers"] = address_list_from_bytes(res["peers"])
+    peers = []
+    if "peers" in res:
+        # BEP0003
+        if isinstance(res["peers"], list):
+            assert all("ip" in p for p in res["peers"])
+            assert all("port" in p for p in res["peers"])
+            peers = [(p["ip"], p["port"]) for p in res["peers"]]
 
-    return float(res["interval"]), res.get("incomplete", 0), res.get("complete", 0), res["peers"]
+        # BEP 0023
+        elif isinstance(res["peers"], bytes):
+            peers = address_list_from_bytes(res["peers"])
+
+        else:
+            print("Unexpected peer format from tracker:")
+            print(res)
+
+    return float(res["interval"]), res.get("incomplete", 0), res.get("complete", 0), peers
