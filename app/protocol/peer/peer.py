@@ -17,6 +17,8 @@ from app.protocol.metainfo import TorrentInfo
 from .handshake import decode_handshake, encode_handshake
 from .messages import METADATA_BLOCK_SIZE, MSG_ID_EXT_HANDSHAKE, MsgExtType, MsgID, decode_message, encode_message
 
+RESERVED_EXT_META = 1 << 20
+
 
 class Peer:
     def __init__(
@@ -24,18 +26,16 @@ class Peer:
         address: tuple[str, int],
         torrent: TorrentInfo,
         client_id: bytes,
-        client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
-        client_ext_support: dict[str | bytes, Any] | None = None,
     ) -> None:
         self.address = address
         self.torrent = copy.deepcopy(torrent)
         self.client_id = client_id
-        self.client_reserved = client_reserved
-        self.client_ext_support = client_ext_support
+        self.client_reserved: bytes = (RESERVED_EXT_META).to_bytes(8, byteorder="big", signed=False)
+        self.client_ext_support: dict[str | bytes, Any] = {"m": {"ut_metadata": 1}}
 
         self.peer_id: bytes | None = None
-        self.peer_reserved: bytes | None = None
         self.peer_bitfield: bytearray | None = None
+        self.peer_reserved: bytes | None = None
 
         self.peer_ext_support: dict[str | bytes, Any] | None = None
         self.peer_ext_meta_id: int | None = None

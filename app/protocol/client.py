@@ -1,7 +1,7 @@
 import asyncio
 import copy
 from datetime import UTC, datetime
-from typing import Any, Self
+from typing import Self
 
 from .files import FileManager
 from .metainfo import TorrentInfo
@@ -15,16 +15,12 @@ class Client(FileManager):
         torrent: TorrentInfo,
         client_id: bytes,
         trackers: list[Tracker] | None = None,
-        client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
-        client_ext_support: dict[str | bytes, Any] | None = None,
         download_folder: str = "./download",
         completed_folder: str = "./completed",
     ) -> None:
         super().__init__(torrent, download_folder, completed_folder)
 
         self.client_id = client_id
-        self.client_reserved = client_reserved
-        self.client_ext_support = client_ext_support
 
         self.trackers: list[Tracker] = trackers if trackers is not None else []
         self.peer_addresses: set[tuple[str, int]] = set()
@@ -54,26 +50,22 @@ class Client(FileManager):
         cls,
         torrent_file: str,
         client_id: bytes,
-        client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
-        client_ext_support: dict[str | bytes, Any] | None = None,
     ) -> Self:
         torrent_info = TorrentInfo.from_file(torrent_file)
         assert torrent_info is not None
         trackers = [Tracker(torrent_info.tracker, torrent_info.info_hash, torrent_info.total_length, client_id)]
-        return cls(torrent_info, client_id, trackers, client_reserved, client_ext_support)
+        return cls(torrent_info, client_id, trackers)
 
     @classmethod
     def from_magnet(
         cls,
         magnet_link: str,
         client_id: bytes,
-        client_reserved: bytes = b"\x00\x00\x00\x00\x00\x00\x00\x00",
-        client_ext_support: dict[str | bytes, Any] | None = None,
         unknown_length: int = 1024,
     ) -> Self:
         torrent_info = TorrentInfo.from_magnet(magnet_link)
         trackers = Tracker.from_magnet(magnet_link, client_id, unknown_length=unknown_length)
-        return cls(torrent_info, client_id, trackers, client_reserved, client_ext_support)
+        return cls(torrent_info, client_id, trackers)
 
     async def get_peers(self) -> None:
         for addresses in await asyncio.gather(*[tracker.get_peers() for tracker in self.trackers]):
@@ -89,8 +81,6 @@ class Client(FileManager):
                     address,
                     self.torrent,
                     self.client_id,
-                    self.client_reserved,
-                    self.client_ext_support,
                 ).run_task()
 
     async def wait_peer(self) -> None:
@@ -181,8 +171,6 @@ class Client(FileManager):
                         address,
                         self.torrent,
                         self.client_id,
-                        self.client_reserved,
-                        self.client_ext_support,
                     ).run_task()
 
             # update connection status
@@ -261,14 +249,14 @@ class Client(FileManager):
         self.is_running = True
 
         # unless DHT is implemented, we need to get peers from trackers
-        if len(self.trackers) > 0:
+        if len(self.trackers) == 0:
+            print("No trackers available, aborting...")
+            self.event_failed.set()
+        else:
             async with asyncio.TaskGroup() as tg:
                 _ = tg.create_task(self._comm_trackers())
                 _ = tg.create_task(self._comm_peers())
                 _ = tg.create_task(self._comm_download())
-        else:
-            print("No trackers available, aborting...")
-            self.event_failed.set()
 
         self._abort = False
         self.is_running = False
