@@ -87,18 +87,20 @@ class Client(FileManager):
         if len(self.peer_addresses) == 0:
             await self.init_peers()
 
-        await asyncio.wait(
-            (asyncio.create_task(peer.event_bitfield.wait()) for peer in self.peers.values()),
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+        if self.peers:
+            await asyncio.wait(
+                (asyncio.create_task(peer.event_bitfield.wait()) for peer in self.peers.values()),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
 
     async def wait_metadata(self) -> None:
         await self.wait_peer()
 
-        await asyncio.wait(
-            (asyncio.create_task(peer.event_metadata.wait()) for peer in self.peers.values()),
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+        if self.peers:
+            await asyncio.wait(
+                (asyncio.create_task(peer.event_metadata.wait()) for peer in self.peers.values()),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
 
         if self.torrent.num_pieces == 0:
             for peer in self.peers.values():
@@ -164,8 +166,8 @@ class Client(FileManager):
                     self._init_files()
                     self._check_pieces()
 
-            # init new peers
             for address in self.peer_addresses:
+                # init new peers
                 if address not in self.peers:
                     self.peers[address] = Peer(
                         address,
